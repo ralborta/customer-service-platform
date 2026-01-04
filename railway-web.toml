@@ -1,0 +1,11 @@
+# Railway config for Web service (Next.js)
+# Use this when deploying the Web service
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/web build"
+
+[deploy]
+startCommand = "cd apps/web && pnpm start"
+healthcheckPath = "/"
+healthcheckTimeout = 100
