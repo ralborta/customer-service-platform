@@ -1,0 +1,25 @@
+{
+  "name": "customer-service-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Plataforma de Atención al Cliente potenciada con IA",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "db:push": "pnpm --filter db db:push",
+    "db:migrate": "pnpm --filter db db:migrate",
+    "db:seed": "pnpm --filter db db:seed",
+    "db:studio": "pnpm --filter db db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

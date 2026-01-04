@@ -1,0 +1,368 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  settings    Json?    // { aiMode: "ASSISTED"|"AUTOPILOT", autopilotCategories: [], confidenceThreshold: 0.7 }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users           User[]
+  customers       Customer[]
+  conversations   Conversation[]
+  tickets         Ticket[]
+  knowledgeArticles KnowledgeArticle[]
+  shipments       Shipment[]
+  invoices        Invoice[]
+  quotes          Quote[]
+  channelAccounts ChannelAccount[]
+  eventLogs       EventLog[]
+
+  @@map("tenants")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId String
+  email    String
+  name     String
+  password String // hashed
+  role     String   @default("agent") // admin, agent, supervisor
+  active   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedConversations Conversation[] @relation("AssignedConversations")
+  assignedTickets       Ticket[]       @relation("AssignedTickets")
+  createdTickets        Ticket[]       @relation("CreatedTickets")
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  tenantId  String
+  phoneNumber String?
+  email     String?
+  name      String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  contacts      Contact[]
+  invoices      Invoice[]
+  quotes        Quote[]
+
+  @@index([tenantId, phoneNumber])
+  @@index([tenantId, email])
+  @@map("customers")
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  customerId String
+  type       String   // phone, email, whatsapp
+  value      String
+  isPrimary  Boolean  @default(false)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("contacts")
+}
+
+model ChannelAccount {
+  id        String   @id @default(cuid())
+  tenantId  String
+  channel   String   // "builderbot_whatsapp", "elevenlabs_calls"
+  accountKey String  // unique identifier for this channel account
+  config    Json?    // channel-specific config
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, accountKey])
+  @@map("channel_accounts")
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  tenantId      String
+  customerId    String
+  primaryChannel String           // WHATSAPP, CALL, EMAIL
+  status        String             @default("OPEN") // OPEN, PENDING, RESOLVED, CLOSED
+  priority      String             @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  assignedToId  String?
+  tags          String[]
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer      Customer           @relation(fields: [customerId], references: [id])
+  assignedTo    User?              @relation("AssignedConversations", fields: [assignedToId], references: [id])
+  messages      Message[]
+  tickets       Ticket[]
+  callSessions  CallSession[]
+  shipments     Shipment[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, assignedToId])
+  @@map("conversations")
+}
+
+model Message {
+  id            String   @id @default(cuid())
+  conversationId String
+  channel       String   // WHATSAPP, CALL, EMAIL
+  direction     String   // INBOUND, OUTBOUND
+  text          String?
+  rawPayload    Json?
+  attachments   Json?    // [{type, url, name}]
+  metadata      Json?    // { suggestedReply, suggestedActions, aiConfidence }
+  createdAt     DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model Ticket {
+  id          String   @id @default(cuid())
+  tenantId    String
+  conversationId String?
+  number      String   @unique
+  status      String   @default("NEW") // NEW, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED
+  category    String   // RECLAMO, INFO, FACTURACION, TRACKING, COTIZACION, OTRO
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  title       String?
+  summary     String?
+  assignedToId String?
+  createdById  String?
+  slaDueAt    DateTime?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation  Conversation?   @relation(fields: [conversationId], references: [id])
+  assignedTo    User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  createdBy     User?           @relation("CreatedTickets", fields: [createdById], references: [id])
+  events        TicketEvent[]
+  surveyResponses SurveyResponse[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@index([conversationId])
+  @@index([number])
+  @@map("tickets")
+}
+
+model TicketEvent {
+  id        String   @id @default(cuid())
+  ticketId  String
+  type      String   // status_change, assignment, comment, call.completed, etc.
+  data      Json?
+  createdById String?
+  createdAt DateTime @default(now())
+
+  ticket    Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_events")
+}
+
+model KnowledgeArticle {
+  id            String   @id @default(cuid())
+  tenantId      String
+  title         String
+  content       String   @db.Text
+  sourceType    String   @default("manual") // manual, url, file
+  sourceUrl     String?
+  tags          String[]
+  embeddingVector Unsupported("vector")? // pgvector
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@fulltext([title, content])
+  @@map("knowledge_articles")
+}
+
+model Shipment {
+  id              String   @id @default(cuid())
+  tenantId        String
+  conversationId  String?
+  trackingNumber String
+  carrier         String?
+  status          String   // pending, in_transit, delivered, exception
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  events  ShipmentEvent[]
+
+  @@unique([tenantId, trackingNumber])
+  @@index([tenantId, status])
+  @@map("shipments")
+}
+
+model ShipmentEvent {
+  id          String   @id @default(cuid())
+  shipmentId  String
+  status      String
+  description String?
+  location    String?
+  occurredAt  DateTime
+  rawData     Json?
+  createdAt   DateTime @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, occurredAt])
+  @@index([shipmentId, occurredAt])
+  @@map("shipment_events")
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  number      String
+  amount      Decimal  @db.Decimal(10, 2)
+  currency    String   @default("USD")
+  status      String   @default("pending") // pending, paid, overdue, cancelled
+  dueDate     DateTime?
+  metadata    Json?    // mock data
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId, customerId])
+  @@index([number])
+  @@map("invoices")
+}
+
+model Quote {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  number      String   @unique
+  status      String   @default("draft") // draft, sent, accepted, rejected, expired
+  notes       String?  @db.Text
+  expiresAt   DateTime?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id])
+  items   QuoteItem[]
+
+  @@index([tenantId, customerId])
+  @@index([number])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  description String
+  quantity    Decimal  @db.Decimal(10, 2)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@map("quote_items")
+}
+
+model CallSession {
+  id            String   @id @default(cuid())
+  conversationId String?
+  phoneNumber   String
+  startedAt     DateTime
+  endedAt       DateTime?
+  duration      Int?     // seconds
+  outcome       String?  // completed, failed, no_answer
+  summary       String?  @db.Text
+  transcript    String?  @db.Text
+  rawPayload    Json?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+
+  @@index([conversationId])
+  @@index([phoneNumber])
+  @@map("call_sessions")
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  ticketId  String
+  type      String   @default("CSAT") // CSAT, NPS
+  score     Int      // 1-5 for CSAT, 0-10 for NPS
+  comment   String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@map("survey_responses")
+}
+
+model EventLog {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  idempotencyKey  String   @unique
+  source          String   // "builderbot_whatsapp", "elevenlabs_post_call", "api", etc.
+  type            String   // "message.received", "call.completed", etc.
+  rawPayload      Json
+  processedAt     DateTime?
+  status          String   @default("pending") // pending, processed, failed, retrying
+  error           String?  @db.Text
+  retryCount      Int      @default(0)
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([idempotencyKey])
+  @@index([source, status])
+  @@index([tenantId, status])
+  @@map("event_logs")
+}
