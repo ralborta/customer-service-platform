@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { apiRequest } from '@/lib/utils';
 import { MessageSquare, Phone, Send } from 'lucide-react';
+import type { TriageResult } from '@customer-service/shared';
 
 interface Message {
   id: string;
@@ -201,7 +202,7 @@ export default function ConversationPage() {
                   try {
                     const lastMessage = conversation.messages[conversation.messages.length - 1];
                     if (lastMessage) {
-                      const triage = await apiRequest(`/ai/triage`, {
+                      const triage = await apiRequest<TriageResult>(`/ai/triage`, {
                         method: 'POST',
                         body: JSON.stringify({
                           conversationId: id,
