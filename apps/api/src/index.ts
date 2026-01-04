@@ -589,20 +589,29 @@ async function buildApp() {
   return fastify;
 }
 
-// Prevent multiple executions
-if (require.main === module) {
-  async function start() {
-    try {
-      const fastify = await buildApp();
-      const port = parseInt(process.env.PORT || '3000', 10);
-      const host = process.env.HOST || '0.0.0.0';
-      await fastify.listen({ port, host });
-      logger.info(`🚀 API listening on ${host}:${port}`);
-    } catch (err) {
-      logger.error(err);
-      process.exit(1);
-    }
-  }
+// Prevent multiple executions - use a flag
+let isStarting = false;
 
+async function start() {
+  if (isStarting) {
+    logger.warn('Start function already called, skipping...');
+    return;
+  }
+  isStarting = true;
+
+  try {
+    const fastify = await buildApp();
+    const port = parseInt(process.env.PORT || '3000', 10);
+    const host = process.env.HOST || '0.0.0.0';
+    await fastify.listen({ port, host });
+    logger.info(`🚀 API listening on ${host}:${port}`);
+  } catch (err) {
+    logger.error(err);
+    process.exit(1);
+  }
+}
+
+// Only start if this is the main module
+if (require.main === module) {
   start();
 }
