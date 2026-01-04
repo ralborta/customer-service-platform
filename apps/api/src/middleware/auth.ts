@@ -17,7 +17,7 @@ declare module 'fastify' {
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   try {
     await request.jwtVerify();
-    const payload = request.user as { userId: string; tenantId: string; email: string; role: string };
+    const payload = request.user as { userId: string; tenantId: string; email: string; role: string } | AuthUser;
     
     // Verify user still exists and is active
     const user = await prisma.user.findUnique({
