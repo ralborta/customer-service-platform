@@ -22,16 +22,17 @@ const fastify = Fastify({
   logger: true
 });
 
+// Register plugins first (before routes)
+fastify.register(cors, {
+  origin: process.env.CORS_ORIGIN || true
+});
+
+fastify.register(jwt, {
+  secret: process.env.JWT_SECRET || 'change-me-in-production'
+});
+
 // Register plugins and routes in async function
 (async () => {
-  // Register plugins first
-  await fastify.register(cors, {
-    origin: process.env.CORS_ORIGIN || true
-  });
-
-  await fastify.register(jwt, {
-    secret: process.env.JWT_SECRET || 'change-me-in-production'
-  });
 
   // Auth routes
   fastify.post('/auth/login', async (request, reply) => {
