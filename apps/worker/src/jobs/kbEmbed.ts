@@ -38,8 +38,8 @@ export async function kbEmbed(articleId: string): Promise<void> {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        const embedding = data.data[0]?.embedding;
+        const data = await response.json() as { data?: Array<{ embedding?: number[] }> };
+        const embedding = data.data?.[0]?.embedding;
 
         if (embedding) {
           // Store embedding (pgvector format)

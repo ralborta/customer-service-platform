@@ -67,8 +67,8 @@ export async function ticketSummary(ticketId: string): Promise<void> {
       });
 
       if (response.ok) {
-        const data = await response.json();
-        summary = data.choices[0]?.message?.content || '';
+        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+        summary = data.choices?.[0]?.message?.content || '';
       }
     } catch (error) {
       logger.error({ ticketId, error }, 'Failed to generate summary with LLM');
