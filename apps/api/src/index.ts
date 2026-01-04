@@ -599,17 +599,20 @@ async function buildApp() {
   return fastify;
 }
 
-async function start() {
-  try {
-    const fastify = await buildApp();
-    const port = parseInt(process.env.PORT || '3000', 10);
-    const host = process.env.HOST || '0.0.0.0';
-    await fastify.listen({ port, host });
-    logger.info(`🚀 API listening on ${host}:${port}`);
-  } catch (err) {
-    logger.error(err);
-    process.exit(1);
+// Prevent multiple executions
+if (require.main === module) {
+  async function start() {
+    try {
+      const fastify = await buildApp();
+      const port = parseInt(process.env.PORT || '3000', 10);
+      const host = process.env.HOST || '0.0.0.0';
+      await fastify.listen({ port, host });
+      logger.info(`🚀 API listening on ${host}:${port}`);
+    } catch (err) {
+      logger.error(err);
+      process.exit(1);
+    }
   }
-}
 
-start();
+  start();
+}
