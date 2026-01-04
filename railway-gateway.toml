@@ -3,7 +3,7 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "cd apps/channel-gateway && pnpm install && pnpm build"
+buildCommand = "pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/db build && pnpm --filter @customer-service/channel-gateway build"
 
 [deploy]
 startCommand = "cd apps/channel-gateway && pnpm start"
