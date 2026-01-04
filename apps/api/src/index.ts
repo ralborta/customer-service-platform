@@ -84,7 +84,7 @@ fastify.post('/auth/login', async (request, reply) => {
 });
 
 // Protected routes
-fastify.decorateRequest('user', null);
+// Note: @fastify/jwt already decorates request.user, so we don't need to do it manually
 fastify.addHook('onRequest', authenticate);
 
 // AI Triage
