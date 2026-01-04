@@ -168,7 +168,7 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
           channel: 'WHATSAPP',
           direction: 'INBOUND',
           text: message.text,
-          rawPayload: validated as unknown as Record<string, unknown>
+          rawPayload: JSON.parse(JSON.stringify(validated))
         }
       });
 
@@ -337,7 +337,7 @@ fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
           outcome: validated.outcome || 'completed',
           summary: validated.summary,
           transcript: validated.transcript,
-          rawPayload: validated as unknown as Record<string, unknown>
+          rawPayload: JSON.parse(JSON.stringify(validated))
         }
       });
 
