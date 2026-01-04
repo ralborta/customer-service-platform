@@ -1,0 +1,53 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8.15.0
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Deploy to Railway (API)
+        if: contains(github.event.head_commit.message, 'api') || github.event_name == 'workflow_dispatch'
+        uses: bervProject/railway-deploy@v1.0.0
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: api
+          # Railway detectará automáticamente el servicio si está conectado al repo
+
+      - name: Deploy to Railway (Gateway)
+        if: contains(github.event.head_commit.message, 'gateway') || github.event_name == 'workflow_dispatch'
+        uses: bervProject/railway-deploy@v1.0.0
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: gateway
+
+      - name: Deploy to Railway (Worker)
+        if: contains(github.event.head_commit.message, 'worker') || github.event_name == 'workflow_dispatch'
+        uses: bervProject/railway-deploy@v1.0.0
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: worker
