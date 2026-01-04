@@ -23,26 +23,16 @@ async function buildApp() {
     logger: true
   });
 
-  // Register plugins first - check if already registered to avoid double registration
-  try {
-    await fastify.register(cors, {
-      origin: process.env.CORS_ORIGIN || true
-    });
-  } catch (err: any) {
-    if (err.code !== 'FST_ERR_DEC_ALREADY_PRESENT') {
-      throw err;
-    }
-  }
+  // Register plugins first
+  await fastify.register(cors, {
+    origin: process.env.CORS_ORIGIN || true
+  });
 
-  try {
-    await fastify.register(jwt, {
-      secret: process.env.JWT_SECRET || 'change-me-in-production'
-    });
-  } catch (err: any) {
-    if (err.code !== 'FST_ERR_DEC_ALREADY_PRESENT') {
-      throw err;
-    }
-  }
+  // Register JWT - use decoratorName to avoid conflicts if needed
+  await fastify.register(jwt, {
+    secret: process.env.JWT_SECRET || 'change-me-in-production',
+    // Don't use decoratorName - use default 'user' but ensure it's only registered once
+  });
 
   // Auth routes
   fastify.post('/auth/login', async (request, reply) => {
