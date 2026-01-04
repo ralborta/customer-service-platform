@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": ["dist"],
   "scripts": {
-    "build": "npx tsc",
-    "dev": "npx tsc --watch",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc --watch",
     "lint": "eslint src --ext .ts",
     "clean": "rm -rf dist"
   },

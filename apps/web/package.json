@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "next dev",
-    "build": "next build || (echo 'Build failed!' && exit 1)",
+    "build": "next build",
     "build:verbose": "next build --debug",
     "start": "next start",
     "lint": "next lint",
