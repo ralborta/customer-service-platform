@@ -11,14 +11,12 @@ const nextConfig = {
     };
     return config;
   },
-  // Deshabilitar generación estática de páginas de error para evitar ENOENT
-  generateBuildId: async () => {
-    return 'build-' + Date.now();
+  // Evitar generación de páginas de error estáticas que causan ENOENT
+  experimental: {
+    missingSuspenseWithCSRBailout: false,
   },
-  onDemandEntries: {
-    maxInactiveAge: 25 * 1000,
-    pagesBufferLength: 2,
-  },
+  // Deshabilitar exportación estática completa (Vercel usa serverless)
+  output: undefined,
 };
 
 module.exports = nextConfig;

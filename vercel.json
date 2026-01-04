@@ -1,3 +1,6 @@
 {
-  "buildCommand": "pnpm -w --filter @customer-service/web build"
+  "buildCommand": "cd apps/web && pnpm install && pnpm build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": "nextjs",
+  "rootDirectory": "apps/web"
 }
