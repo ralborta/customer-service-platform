@@ -2,7 +2,6 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { prisma } from '@customer-service/db';
-import { Prisma } from '@prisma/client';
 import { builderbotAdapter } from '@customer-service/shared';
 import { WhatsAppWebhookSchema, ElevenLabsWebhookSchema } from '@customer-service/shared';
 import { createHash } from 'crypto';
@@ -142,7 +141,7 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
         idempotencyKey,
         source: 'builderbot_whatsapp',
         type: validated.event || 'message.received',
-        rawPayload: validated as unknown as Prisma.InputJsonValue,
+          rawPayload: JSON.parse(JSON.stringify(validated)),
         status: 'pending'
       }
     });
@@ -306,7 +305,7 @@ fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
         idempotencyKey,
         source: 'elevenlabs_post_call',
         type: 'call.completed',
-        rawPayload: validated as unknown as Prisma.InputJsonValue,
+          rawPayload: JSON.parse(JSON.stringify(validated)),
         status: 'pending'
       }
     });
