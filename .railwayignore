@@ -1,0 +1,10 @@
+node_modules
+.next
+.turbo
+.env
+.env.local
+*.log
+.git
+README.md
+apps/web
+packages/*/dist

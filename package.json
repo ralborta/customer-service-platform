@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "start": "pnpm --filter @customer-service/api start",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
     "db:push": "pnpm --filter db db:push",
@@ -13,6 +14,7 @@
     "db:seed": "pnpm --filter db db:seed",
     "db:studio": "pnpm --filter db db:studio"
   },
+  "main": "apps/api/src/index.ts",
   "devDependencies": {
     "turbo": "^2.0.0",
     "typescript": "^5.3.3"

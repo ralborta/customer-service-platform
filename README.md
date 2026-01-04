@@ -213,17 +213,39 @@ Headers:
    - Channel Gateway (desde GitHub)
    - Worker (desde GitHub)
 
-3. **Variables de entorno en Railway:**
+3. **Para cada servicio, configura:**
+
+   **API:**
+   - Root Directory: `/` (raíz del monorepo)
+   - Build Command: `pnpm install && pnpm --filter @customer-service/api build`
+   - Start Command: `pnpm --filter @customer-service/api start`
+   - O copia `railway-api.toml` a `railway.toml`
+
+   **Channel Gateway:**
+   - Root Directory: `/`
+   - Build Command: `pnpm install && pnpm --filter @customer-service/channel-gateway build`
+   - Start Command: `pnpm --filter @customer-service/channel-gateway start`
+   - O copia `railway-gateway.toml` a `railway.toml`
+
+   **Worker:**
+   - Root Directory: `/`
+   - Build Command: `pnpm install && pnpm --filter @customer-service/worker build`
+   - Start Command: `pnpm --filter @customer-service/worker start`
+   - O copia `railway-worker.toml` a `railway.toml`
+
+4. **Variables de entorno en Railway:**
 
    Para cada servicio, configura:
    - `DATABASE_URL` (desde el servicio PostgreSQL)
-   - `JWT_SECRET` (genera uno seguro)
-   - `CORS_ORIGIN` (URL de tu frontend)
+   - `JWT_SECRET` (genera uno seguro) - solo para API
+   - `CORS_ORIGIN` (URL de tu frontend) - solo para API
    - `BUILDERBOT_API_KEY`, `ELEVENLABS_API_KEY`, etc.
 
-4. **Configurar dominios:**
+5. **Configurar dominios:**
    - API: `api.tu-dominio.com`
    - Gateway: `gateway.tu-dominio.com` (o subdominio)
+
+**Nota:** Ver `RAILWAY.md` para instrucciones detalladas.
 
 ### Vercel (Web Dashboard)
 

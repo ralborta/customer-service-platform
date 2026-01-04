@@ -1,0 +1,11 @@
+# Railway config for API service
+# Use this when deploying the API service
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "cd apps/api && pnpm install && pnpm build"
+
+[deploy]
+startCommand = "cd apps/api && pnpm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 100

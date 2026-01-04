@@ -1,0 +1,9 @@
+# Railway config for Worker service
+# Use this when deploying the Worker service
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "cd apps/worker && pnpm install && pnpm build"
+
+[deploy]
+startCommand = "cd apps/worker && pnpm start"
