@@ -210,7 +210,6 @@ model KnowledgeArticle {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
-  @@fulltext([title, content])
   @@map("knowledge_articles")
 }
 
