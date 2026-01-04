@@ -37,11 +37,14 @@ async function buildApp() {
     origin: process.env.CORS_ORIGIN || true
   });
 
-  // Register JWT - use decoratorName to avoid conflicts if needed
-  await fastify.register(jwt, {
-    secret: process.env.JWT_SECRET || 'change-me-in-production',
-    // Don't use decoratorName - use default 'user' but ensure it's only registered once
-  });
+  // Register JWT - check if already registered first
+  if (!fastify.hasDecorator('user')) {
+    await fastify.register(jwt, {
+      secret: process.env.JWT_SECRET || 'change-me-in-production'
+    });
+  } else {
+    logger.warn('JWT plugin already registered, skipping...');
+  }
 
   // Auth routes
   fastify.post('/auth/login', async (request, reply) => {
