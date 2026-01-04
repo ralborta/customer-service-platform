@@ -11,10 +11,8 @@ const nextConfig = {
     };
     return config;
   },
-  // Evitar problemas con generación de páginas de error estáticas
-  experimental: {
-    missingSuspenseWithCSRBailout: false,
-  },
+  // Deshabilitar generación estática de páginas de error para evitar ENOENT en Vercel
+  output: 'standalone',
 };
 
 module.exports = nextConfig;
