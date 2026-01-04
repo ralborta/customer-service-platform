@@ -6,6 +6,6 @@ builder = "NIXPACKS"
 buildCommand = "pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/web build"
 
 [deploy]
-startCommand = "cd apps/web && PORT=${PORT:-3000} pnpm start"
+startCommand = "cd apps/web && pnpm start"
 healthcheckPath = "/"
 healthcheckTimeout = 100
