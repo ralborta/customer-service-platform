@@ -10,7 +10,7 @@ export interface AuthUser {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: AuthUser;
+    user?: AuthUser | string | object | Buffer;
   }
 }
 

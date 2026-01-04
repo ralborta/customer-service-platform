@@ -19,7 +19,7 @@ const logger = pino({
 });
 
 const fastify = Fastify({
-  logger
+  logger: true
 });
 
 // CORS
