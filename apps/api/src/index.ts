@@ -22,17 +22,7 @@ const fastify = Fastify({
   logger: true
 });
 
-// CORS
-fastify.register(cors, {
-  origin: process.env.CORS_ORIGIN || true
-});
-
-// JWT
-fastify.register(jwt, {
-  secret: process.env.JWT_SECRET || 'change-me-in-production'
-});
-
-// Auth routes
+// Auth routes (plugins will be registered in start function)
 fastify.post('/auth/login', async (request, reply) => {
   const { email, password, tenantSlug } = request.body as {
     email: string;
@@ -587,6 +577,15 @@ fastify.get('/health', async () => {
 
 const start = async () => {
   try {
+    // Register plugins first
+    await fastify.register(cors, {
+      origin: process.env.CORS_ORIGIN || true
+    });
+
+    await fastify.register(jwt, {
+      secret: process.env.JWT_SECRET || 'change-me-in-production'
+    });
+
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });
