@@ -18,12 +18,11 @@ const logger = pino({
   }
 });
 
-const fastify = Fastify({
-  logger: true
-});
+async function buildApp() {
+  const fastify = Fastify({
+    logger: true
+  });
 
-// Register plugins and routes in async function
-(async () => {
   // Register plugins first
   await fastify.register(cors, {
     origin: process.env.CORS_ORIGIN || true
@@ -85,7 +84,6 @@ const fastify = Fastify({
   });
 
   // Protected routes
-  // Note: @fastify/jwt already decorates request.user, so we don't need to do it manually
   fastify.addHook('onRequest', authenticate);
 
   // AI Triage
@@ -586,8 +584,12 @@ const fastify = Fastify({
     return { status: 'ok', service: 'api' };
   });
 
-  // Start server
+  return fastify;
+}
+
+async function start() {
   try {
+    const fastify = await buildApp();
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });
@@ -596,4 +598,6 @@ const fastify = Fastify({
     logger.error(err);
     process.exit(1);
   }
-})();
+}
+
+start();
