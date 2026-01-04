@@ -11,6 +11,10 @@ const nextConfig = {
     };
     return config;
   },
+  // Evitar problemas con generación de páginas de error estáticas
+  experimental: {
+    missingSuspenseWithCSRBailout: false,
+  },
 };
 
 module.exports = nextConfig;
