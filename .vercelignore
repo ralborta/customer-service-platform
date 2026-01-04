@@ -1,0 +1,9 @@
+# Ignore everything except web app
+apps/api/**
+apps/channel-gateway/**
+apps/worker/**
+packages/db/prisma/migrations/**
+*.md
+!README.md
+docker-compose.yml
+.github/**

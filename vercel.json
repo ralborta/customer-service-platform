@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "buildCommand": "cd ../.. && pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/web build",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "cd ../.. && pnpm install",
+  "framework": "nextjs",
+  "rootDirectory": "apps/web"
+}
