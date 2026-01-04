@@ -23,12 +23,12 @@ const fastify = Fastify({
 });
 
 // CORS
-await fastify.register(cors, {
+fastify.register(cors, {
   origin: process.env.CORS_ORIGIN || true
 });
 
 // JWT
-await fastify.register(jwt, {
+fastify.register(jwt, {
   secret: process.env.JWT_SECRET || 'change-me-in-production'
 });
 
@@ -587,6 +587,15 @@ fastify.get('/health', async () => {
 
 const start = async () => {
   try {
+    // Register plugins
+    await fastify.register(cors, {
+      origin: process.env.CORS_ORIGIN || true
+    });
+
+    await fastify.register(jwt, {
+      secret: process.env.JWT_SECRET || 'change-me-in-production'
+    });
+
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });

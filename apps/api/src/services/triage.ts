@@ -1,5 +1,6 @@
 import { prisma } from '@customer-service/db';
-import type { TriageResult, IntentType } from '@customer-service/shared';
+import type { TriageResult } from '@customer-service/shared';
+import { IntentType } from '@customer-service/shared';
 
 export async function performTriage(
   conversationId: string,
@@ -35,7 +36,7 @@ export async function performTriage(
   }
 
   const messageText = lastMessage.text.toLowerCase();
-  let intent: IntentType = 'otro';
+  let intent: IntentType = IntentType.OTRO;
   let confidence = 0.5;
   let category = 'OTRO';
   const missingFields: string[] = [];
@@ -43,7 +44,7 @@ export async function performTriage(
 
   // Rule-based triage (MVP - can be replaced with LLM)
   if (messageText.includes('seguimiento') || messageText.includes('tracking') || messageText.includes('pedido') || messageText.includes('envío')) {
-    intent = 'tracking';
+    intent = IntentType.TRACKING;
     confidence = 0.8;
     category = 'TRACKING';
     
@@ -62,7 +63,7 @@ export async function performTriage(
       });
     }
   } else if (messageText.includes('factura') || messageText.includes('deuda') || messageText.includes('pago') || messageText.includes('cuenta')) {
-    intent = 'facturacion';
+    intent = IntentType.FACTURACION;
     confidence = 0.8;
     category = 'FACTURACION';
     suggestedActions.push({
@@ -70,7 +71,7 @@ export async function performTriage(
       payload: { customerId: conversation.customerId }
     });
   } else if (messageText.includes('reclamo') || messageText.includes('problema') || messageText.includes('dañado') || messageText.includes('defectuoso') || messageText.includes('reembolso')) {
-    intent = 'reclamo';
+    intent = IntentType.RECLAMO;
     confidence = 0.9;
     category = 'RECLAMO';
     missingFields.push('orderNumber', 'description');
@@ -79,7 +80,7 @@ export async function performTriage(
       payload: { category: 'RECLAMO', priority: 'HIGH' }
     });
   } else if (messageText.includes('cotización') || messageText.includes('precio') || messageText.includes('costo')) {
-    intent = 'cotizacion';
+    intent = IntentType.COTIZACION;
     confidence = 0.7;
     category = 'COTIZACION';
     suggestedActions.push({
@@ -87,7 +88,7 @@ export async function performTriage(
       payload: {}
     });
   } else if (messageText.includes('info') || messageText.includes('información') || messageText.includes('consulta')) {
-    intent = 'info';
+    intent = IntentType.INFO;
     confidence = 0.6;
     category = 'INFO';
   }
@@ -150,8 +151,8 @@ export async function performTriage(
       });
 
       if (response.ok) {
-        const data = await response.json();
-        const llmResponse = data.choices[0]?.message?.content || '';
+        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+        const llmResponse = data.choices?.[0]?.message?.content || '';
         // Parse LLM response and enhance triage result
         // This is a simplified version - you could parse JSON from LLM
       }

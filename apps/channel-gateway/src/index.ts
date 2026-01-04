@@ -17,16 +17,16 @@ const logger = pino({
 });
 
 const fastify = Fastify({
-  logger
+  logger: true
 });
 
 // CORS
-await fastify.register(cors, {
+fastify.register(cors, {
   origin: true
 });
 
 // Rate limiting
-await fastify.register(rateLimit, {
+fastify.register(rateLimit, {
   max: 100,
   timeWindow: '1 minute'
 });
@@ -141,7 +141,7 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
         idempotencyKey,
         source: 'builderbot_whatsapp',
         type: validated.event || 'message.received',
-        rawPayload: validated as unknown as Record<string, unknown>,
+        rawPayload: validated as any,
         status: 'pending'
       }
     });
@@ -305,7 +305,7 @@ fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
         idempotencyKey,
         source: 'elevenlabs_post_call',
         type: 'call.completed',
-        rawPayload: validated as unknown as Record<string, unknown>,
+        rawPayload: validated as any,
         status: 'pending'
       }
     });
@@ -412,6 +412,16 @@ fastify.get('/health', async () => {
 
 const start = async () => {
   try {
+    // Register plugins
+    await fastify.register(cors, {
+      origin: true
+    });
+
+    await fastify.register(rateLimit, {
+      max: 100,
+      timeWindow: '1 minute'
+    });
+
     const port = parseInt(process.env.PORT || '3001', 10);
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });
