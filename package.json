@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:web": "pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/web build",
     "start": "pnpm --filter @customer-service/api start",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
