@@ -18,7 +18,16 @@ const logger = pino({
   }
 });
 
+// Singleton pattern to ensure only one app instance
+let appInstance: ReturnType<typeof Fastify> | null = null;
+
 async function buildApp() {
+  // Return existing instance if already built
+  if (appInstance) {
+    logger.warn('App instance already exists, returning existing instance');
+    return appInstance;
+  }
+
   const fastify = Fastify({
     logger: true
   });
@@ -586,6 +595,7 @@ async function buildApp() {
     return { status: 'ok', service: 'api' };
   });
 
+  appInstance = fastify;
   return fastify;
 }
 
