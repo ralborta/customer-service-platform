@@ -26,13 +26,8 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       return reply.code(401).send({ error: 'User not found or inactive' });
     }
 
-    // Update request.user with verified user data
-    (request as any).user = {
-      userId: user.id,
-      tenantId: user.tenantId,
-      email: user.email,
-      role: user.role
-    };
+    // request.user is already set by jwtVerify, we just need to verify it matches our user
+    // No need to reassign, just use the payload from JWT
   } catch (err) {
     return reply.code(401).send({ error: 'Unauthorized' });
   }
