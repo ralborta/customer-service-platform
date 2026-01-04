@@ -37,13 +37,19 @@ async function buildApp() {
     origin: process.env.CORS_ORIGIN || true
   });
 
-  // Register JWT - check if already registered first
-  if (!fastify.hasDecorator('user')) {
+  // Register JWT - wrap in try-catch to handle double registration gracefully
+  try {
     await fastify.register(jwt, {
       secret: process.env.JWT_SECRET || 'change-me-in-production'
     });
-  } else {
-    logger.warn('JWT plugin already registered, skipping...');
+  } catch (err: any) {
+    // If decorator already exists, that's okay - continue
+    if (err.code === 'FST_ERR_DEC_ALREADY_PRESENT') {
+      logger.warn('JWT plugin already registered (this is okay), continuing...');
+    } else {
+      // Re-throw other errors
+      throw err;
+    }
   }
 
   // Auth routes
