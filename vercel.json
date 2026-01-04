@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/web build",
+  "buildCommand": "cd ../.. && pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/web build",
   "outputDirectory": ".next",
-  "installCommand": "pnpm install"
+  "installCommand": "cd ../.. && pnpm install"
 }
