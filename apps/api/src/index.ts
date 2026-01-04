@@ -89,7 +89,7 @@ fastify.addHook('onRequest', authenticate);
 
 // AI Triage
 fastify.post('/ai/triage', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const body = request.body as unknown;
   const validated = TriageRequestSchema.parse(body);
 
@@ -118,7 +118,7 @@ fastify.post('/ai/triage', async (request, reply) => {
 
 // Conversations
 fastify.get('/conversations', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { status, priority, channel, assignedTo } = request.query as Record<string, string>;
 
   const conversations = await prisma.conversation.findMany({
@@ -148,7 +148,7 @@ fastify.get('/conversations', async (request, reply) => {
 });
 
 fastify.get('/conversations/:id', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { id } = request.params as { id: string };
 
   const conversation = await prisma.conversation.findUnique({
@@ -190,7 +190,7 @@ fastify.get('/conversations/:id', async (request, reply) => {
 
 // Messages
 fastify.post('/conversations/:id/messages', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { id } = request.params as { id: string };
   const { text, channel, direction } = request.body as {
     text: string;
@@ -221,7 +221,7 @@ fastify.post('/conversations/:id/messages', async (request, reply) => {
 
 // Tickets
 fastify.get('/tickets', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { status, category, priority, assignedTo } = request.query as Record<string, string>;
 
   const tickets = await prisma.ticket.findMany({
@@ -249,7 +249,7 @@ fastify.get('/tickets', async (request, reply) => {
 });
 
 fastify.get('/tickets/:id', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { id } = request.params as { id: string };
 
   const ticket = await prisma.ticket.findUnique({
@@ -284,7 +284,7 @@ fastify.get('/tickets/:id', async (request, reply) => {
 });
 
 fastify.post('/tickets', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const body = request.body as {
     conversationId?: string;
     category: string;
@@ -311,7 +311,7 @@ fastify.post('/tickets', async (request, reply) => {
 });
 
 fastify.patch('/tickets/:id', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { id } = request.params as { id: string };
   const body = request.body as {
     status?: string;
@@ -356,7 +356,7 @@ fastify.patch('/tickets/:id', async (request, reply) => {
 
 // Tracking
 fastify.post('/tracking/lookup', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const body = request.body as unknown;
   const validated = TrackingLookupSchema.parse(body);
 
@@ -433,7 +433,7 @@ fastify.post('/tracking/lookup', async (request, reply) => {
 
 // Knowledge Base
 fastify.get('/kb/search', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { q } = request.query as { q: string };
 
   if (!q) {
@@ -461,7 +461,7 @@ fastify.get('/kb/search', async (request, reply) => {
 });
 
 fastify.get('/kb/articles', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
 
   const articles = await prisma.knowledgeArticle.findMany({
     where: { tenantId: user.tenantId },
@@ -473,7 +473,7 @@ fastify.get('/kb/articles', async (request, reply) => {
 });
 
 fastify.post('/kb/articles', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const body = request.body as {
     title: string;
     content: string;
@@ -498,7 +498,7 @@ fastify.post('/kb/articles', async (request, reply) => {
 
 // Billing (mock)
 fastify.get('/billing/invoices', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { customerId } = request.query as { customerId?: string };
 
   const invoices = await prisma.invoice.findMany({
@@ -516,7 +516,7 @@ fastify.get('/billing/invoices', async (request, reply) => {
 
 // Quotes
 fastify.get('/quotes', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { customerId } = request.query as { customerId?: string };
 
   const quotes = await prisma.quote.findMany({
@@ -536,7 +536,7 @@ fastify.get('/quotes', async (request, reply) => {
 });
 
 fastify.post('/quotes', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const body = request.body as unknown;
   const validated = CreateQuoteSchema.parse(body);
 
@@ -562,7 +562,7 @@ fastify.post('/quotes', async (request, reply) => {
 });
 
 fastify.get('/quotes/:id', async (request, reply) => {
-  const user = request.user as AuthUser;
+  const user = request.authUser as AuthUser;
   const { id } = request.params as { id: string };
 
   const quote = await prisma.quote.findUnique({

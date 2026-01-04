@@ -10,7 +10,7 @@ export interface AuthUser {
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: AuthUser | string | object | Buffer;
+    authUser?: AuthUser;
   }
 }
 
@@ -29,7 +29,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       return reply.code(401).send({ error: 'User not found or inactive' });
     }
 
-    request.user = {
+    request.authUser = {
       userId: user.id,
       tenantId: user.tenantId,
       email: user.email,
