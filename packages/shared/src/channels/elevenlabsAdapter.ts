@@ -51,7 +51,7 @@ class ElevenLabsAdapterImpl implements ElevenLabsAdapter {
         return { success: false, error };
       }
 
-      const data = await response.json();
+      const data = await response.json() as { call_id?: string; id?: string };
       return { success: true, callId: data.call_id || data.id };
     } catch (error) {
       return {

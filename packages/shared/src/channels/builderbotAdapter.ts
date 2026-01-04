@@ -62,7 +62,7 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
         return { success: false, error };
       }
 
-      const data = await response.json();
+      const data = await response.json() as { messageId?: string; id?: string };
       return { success: true, messageId: data.messageId || data.id };
     } catch (error) {
       return {
