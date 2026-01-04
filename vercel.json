@@ -1,5 +1,0 @@
-{
-  "buildCommand": "cd ../.. && pnpm install --ignore-scripts && pnpm --filter @customer-service/db build && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/web build",
-  "outputDirectory": ".next",
-  "installCommand": "cd ../.. && pnpm install --ignore-scripts"
-}
