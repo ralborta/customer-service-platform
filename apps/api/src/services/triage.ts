@@ -26,7 +26,7 @@ export async function performTriage(
   const lastMessage = conversation.messages[0];
   if (!lastMessage || !lastMessage.text) {
     return {
-      intent: 'otro',
+      intent: IntentType.OTRO,
       confidence: 0.3,
       missingFields: [],
       suggestedActions: [],
