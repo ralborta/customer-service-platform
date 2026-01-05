@@ -57,26 +57,45 @@ export default function InboxPage() {
   async function loadConversations() {
     try {
       setLoading(true);
+      
+      // Verificar que hay token (autenticación)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      if (!token) {
+        console.warn('⚠️ No hay token de autenticación. Redirigiendo a login...');
+        window.location.href = '/login';
+        return;
+      }
+      
       const data = await apiRequest<Conversation[]>('/conversations');
       console.log('📥 Conversaciones cargadas:', data.length);
       setConversations(data);
       if (data.length > 0 && !selectedConversation) {
         loadFullConversation(data[0].id);
       } else if (data.length === 0) {
-        console.warn('⚠️ No hay conversaciones en la base de datos');
-        console.warn('💡 Verifica que:');
-        console.warn('   1. Los webhooks de Builderbot estén llegando al Channel Gateway');
-        console.warn('   2. Los mensajes se estén guardando en la DB');
-        console.warn('   3. El API esté accesible desde Vercel');
+        console.info('ℹ️ No hay conversaciones en la base de datos');
+        console.info('💡 Esto es normal si:');
+        console.info('   1. Es la primera vez que usas el sistema');
+        console.info('   2. Aún no han llegado mensajes por WhatsApp');
+        console.info('   3. Los webhooks de Builderbot no están configurados');
       }
     } catch (error) {
       console.error('❌ Error loading conversations:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('💡 Verifica que:');
-      console.error('   1. NEXT_PUBLIC_API_URL esté configurado en Vercel');
-      console.error('   2. El API esté corriendo en Railway');
-      console.error('   3. Estés autenticado (token en localStorage)');
-      alert(`Error al cargar conversaciones: ${errorMessage}. Revisa la consola para más detalles.`);
+      
+      // Mensaje más específico según el tipo de error
+      let userMessage = errorMessage;
+      if (errorMessage.includes('No se pudo conectar')) {
+        userMessage = 'No se puede conectar al API. Verifica que NEXT_PUBLIC_API_URL esté configurado en Vercel.';
+      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+        userMessage = 'No estás autenticado. Serás redirigido al login...';
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+      } else if (errorMessage.includes('404')) {
+        userMessage = 'El endpoint del API no existe. Verifica que el API esté corriendo correctamente.';
+      }
+      
+      alert(`Error al cargar conversaciones: ${userMessage}\n\nRevisa la consola (F12) para más detalles.`);
     } finally {
       setLoading(false);
     }
