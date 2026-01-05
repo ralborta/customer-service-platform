@@ -104,17 +104,32 @@ export default function InboxPage() {
   async function loadFullConversation(id: string) {
     try {
       const data = await apiRequest<FullConversation>(`/conversations/${id}`);
+      
+      // Validar que los datos existen
+      if (!data) {
+        throw new Error('No se recibieron datos de la conversación');
+      }
+      
+      // Asegurar que messages existe (puede ser un array vacío)
+      if (!data.messages) {
+        data.messages = [];
+      }
+      
       console.log('💬 Conversación cargada:', {
         id: data.id,
-        messagesCount: data.messages.length,
-        customer: data.customer.name
+        messagesCount: data.messages?.length || 0,
+        customer: data.customer?.name || 'Sin nombre'
       });
       setSelectedConversation(data);
       
       // Check for suggested reply in last message
-      const lastMessage = data.messages[data.messages.length - 1];
-      if (lastMessage?.metadata?.suggestedReply) {
-        setReplyText(lastMessage.metadata.suggestedReply as string);
+      if (data.messages && data.messages.length > 0) {
+        const lastMessage = data.messages[data.messages.length - 1];
+        if (lastMessage?.metadata?.suggestedReply) {
+          setReplyText(lastMessage.metadata.suggestedReply as string);
+        } else {
+          setReplyText('');
+        }
       } else {
         setReplyText('');
       }
@@ -122,6 +137,7 @@ export default function InboxPage() {
       console.error('❌ Error loading conversation:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       alert(`Error al cargar conversación: ${errorMessage}`);
+      setSelectedConversation(null);
     }
   }
 
@@ -153,7 +169,7 @@ export default function InboxPage() {
   }
 
   async function getSuggestedReply() {
-    if (!selectedConversation) return;
+    if (!selectedConversation || !selectedConversation.messages || selectedConversation.messages.length === 0) return;
     
     try {
       const lastMessage = selectedConversation.messages[selectedConversation.messages.length - 1];
@@ -358,7 +374,7 @@ export default function InboxPage() {
                             <div className="text-[11px] text-gray-500 truncate mb-0.5">
                               {conv.customer.phoneNumber}
                             </div>
-                            {conv.messages[0] && (
+                            {conv.messages && conv.messages[0] && (
                               <div className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">
                                 {conv.messages[0].text || '(Sin texto)'}
                               </div>
@@ -382,7 +398,7 @@ export default function InboxPage() {
               <>
                 {/* Mensajes */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                  {selectedConversation.messages.length === 0 ? (
+                  {!selectedConversation.messages || selectedConversation.messages.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-400 text-sm">
                       No hay mensajes en esta conversación
                     </div>
@@ -538,7 +554,7 @@ export default function InboxPage() {
                 <div>
                   <h4 className="font-semibold text-xs mb-2.5 text-gray-700 uppercase tracking-wide">Status</h4>
                   <div className="text-xs text-gray-600 space-y-0.5">
-                    <div>{selectedConversation._count.messages} messages, {selectedConversation._count.tickets} tickets</div>
+                    <div>{selectedConversation._count?.messages || 0} messages, {selectedConversation._count?.tickets || 0} tickets</div>
                   </div>
                 </div>
 
@@ -558,7 +574,7 @@ export default function InboxPage() {
                     )}
                     <div className="flex items-center gap-2.5">
                       <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-gray-600">{selectedConversation._count.messages} conversations</span>
+                      <span className="text-gray-600">{selectedConversation._count?.messages || 0} conversations</span>
                     </div>
                   </div>
                 </div>
