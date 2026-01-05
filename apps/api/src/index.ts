@@ -34,10 +34,30 @@ async function buildApp() {
   });
 
   // Register plugins first
+  // CORS: Permitir todos los orígenes de Vercel (producción y previews)
+  // Si CORS_ORIGIN está configurado, usarlo; si no, permitir todos
+  const corsOrigin = process.env.CORS_ORIGIN;
   await fastify.register(cors, {
-    origin: process.env.CORS_ORIGIN || true, // true = permitir todos los orígenes
+    origin: corsOrigin 
+      ? (origin, cb) => {
+          // Si CORS_ORIGIN está configurado, verificar que el origen coincida
+          // O si es un dominio de Vercel, permitirlo
+          if (!origin) {
+            cb(null, true);
+            return;
+          }
+          const allowedOrigins = corsOrigin.split(',').map(o => o.trim());
+          const isVercelDomain = origin.includes('.vercel.app') || origin.includes('vercel.app');
+          if (allowedOrigins.includes(origin) || isVercelDomain) {
+            cb(null, true);
+          } else {
+            cb(null, false);
+          }
+        }
+      : true, // Si no hay CORS_ORIGIN, permitir todos los orígenes
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   });
 
   // Register JWT - wrap in try-catch to handle double registration gracefully
