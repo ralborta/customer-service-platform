@@ -35,7 +35,9 @@ async function buildApp() {
 
   // Register plugins first
   await fastify.register(cors, {
-    origin: process.env.CORS_ORIGIN || true
+    origin: process.env.CORS_ORIGIN || true, // true = permitir todos los orígenes
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
   });
 
   // Register JWT - wrap in try-catch to handle double registration gracefully
