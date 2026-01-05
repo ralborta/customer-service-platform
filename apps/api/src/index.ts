@@ -75,21 +75,53 @@ async function buildApp() {
     }
   }
 
+  // Debug endpoint - verificar usuarios en DB
+  fastify.get('/debug/users', async (request, reply) => {
+    try {
+      const users = await prisma.user.findMany({
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          active: true,
+          tenantId: true,
+          password: false // No exponer passwords
+        },
+        include: {
+          tenant: {
+            select: {
+              name: true,
+              slug: true
+            }
+          }
+        }
+      });
+      return { users, count: users.length };
+    } catch (error) {
+      logger.error({ error }, 'Debug users error');
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
+  });
+
   // Auth routes
   fastify.post('/auth/login', async (request, reply) => {
     try {
-      const { email, password, tenantSlug } = request.body as {
+      const body = request.body as any;
+      logger.info({ body: JSON.stringify(body) }, 'Raw login request body');
+      
+      const { email, password, tenantSlug } = body as {
         email: string;
         password: string;
         tenantSlug?: string;
       };
 
       if (!email || !password) {
-        logger.warn('Login attempt without email or password');
+        logger.warn({ email: !!email, password: !!password }, 'Login attempt without email or password');
         return reply.code(400).send({ error: 'Email and password required' });
       }
 
-      logger.info({ email, hasTenantSlug: !!tenantSlug }, 'Login attempt');
+      logger.info({ email, passwordLength: password.length, hasTenantSlug: !!tenantSlug }, 'Login attempt');
 
       // Find tenant if slug provided, otherwise try to find user in any tenant
       let tenant = null;
@@ -120,12 +152,29 @@ async function buildApp() {
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
-      logger.info({ email, userId: user.id, tenantId: user.tenantId }, 'User found, verifying password');
+      logger.info({ 
+        email, 
+        userId: user.id, 
+        tenantId: user.tenantId,
+        userActive: user.active,
+        passwordHashLength: user.password.length,
+        passwordHashStart: user.password.substring(0, 20)
+      }, 'User found, verifying password');
 
       // Verify password
+      logger.info({ email }, 'Comparing password with bcrypt...');
       const valid = await bcrypt.compare(password, user.password);
+      logger.info({ email, valid }, 'Password comparison result');
+      
       if (!valid) {
-        logger.warn({ email, userId: user.id }, 'Invalid password');
+        // Intentar verificar si el password está en texto plano (por si acaso)
+        const isPlainText = password === user.password;
+        logger.warn({ 
+          email, 
+          userId: user.id,
+          isPlainText,
+          passwordMatchesPlainText: isPlainText
+        }, 'Invalid password');
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
@@ -738,6 +787,38 @@ async function buildApp() {
   // Health check
   fastify.get('/health', async () => {
     return { status: 'ok', service: 'api' };
+  });
+
+  // Debug endpoint - test password hash
+  fastify.post('/debug/test-password', async (request, reply) => {
+    try {
+      const { email, password } = request.body as { email: string; password: string };
+      
+      const user = await prisma.user.findFirst({
+        where: { email },
+        select: { id: true, email: true, password: true, active: true }
+      });
+
+      if (!user) {
+        return { found: false, message: 'User not found' };
+      }
+
+      const valid = await bcrypt.compare(password, user.password);
+      const testHash = await bcrypt.hash(password, 10);
+      
+      return {
+        found: true,
+        userActive: user.active,
+        passwordValid: valid,
+        passwordHashLength: user.password.length,
+        passwordHashStart: user.password.substring(0, 30),
+        testHashStart: testHash.substring(0, 30),
+        hashesMatch: user.password === testHash
+      };
+    } catch (error) {
+      logger.error({ error }, 'Debug test password error');
+      return reply.code(500).send({ error: 'Internal server error' });
+    }
   });
 
   appInstance = fastify;
