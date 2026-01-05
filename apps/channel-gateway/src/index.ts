@@ -1,4 +1,7 @@
-// CHECK #1: Confirmar que este código se está ejecutando
+// CHECK #1: Confirmar que este código se está ejecutando - LOGS FORENSES
+console.log("🔥 ENTRYPOINT: CHANNEL-GATEWAY 🔥");
+console.log("CWD:", process.cwd());
+console.log("ARGV:", process.argv);
 console.log("🔥🔥🔥 BOOT_CHANNEL_GATEWAY__ONLY__2026-01-05 🔥🔥🔥");
 
 import Fastify from 'fastify';
