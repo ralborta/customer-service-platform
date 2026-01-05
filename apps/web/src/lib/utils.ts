@@ -5,7 +5,25 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+// Obtener API_URL con validación
+function getApiUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+  
+  // Validar que la URL sea válida
+  if (typeof window !== 'undefined') {
+    try {
+      new URL(url);
+    } catch (e) {
+      console.error('❌ NEXT_PUBLIC_API_URL no es una URL válida:', url);
+      console.error('💡 Configura NEXT_PUBLIC_API_URL en Vercel con la URL completa del API (ej: https://tu-api.railway.app)');
+    }
+  }
+  
+  // Asegurar que termine sin slash
+  return url.endsWith('/') ? url.slice(0, -1) : url;
+}
+
+export const API_URL = getApiUrl();
 
 export async function apiRequest<T>(
   endpoint: string,
@@ -16,14 +34,21 @@ export async function apiRequest<T>(
   // Construir URL completa
   const url = `${API_URL}${endpoint}`;
   
-  // Log para debug (solo en desarrollo)
-  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  // Log para debug (siempre en desarrollo, o si hay error)
+  if (typeof window !== 'undefined') {
     console.log('🌐 API Request:', {
       url,
       endpoint,
       apiUrl: API_URL,
-      hasToken: !!token
+      hasToken: !!token,
+      env: process.env.NODE_ENV
     });
+    
+    // Advertencia si API_URL es localhost en producción
+    if (API_URL.includes('localhost') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+      console.error('⚠️ ADVERTENCIA: NEXT_PUBLIC_API_URL apunta a localhost pero estás en producción');
+      console.error('💡 Configura NEXT_PUBLIC_API_URL en Vercel con la URL de Railway');
+    }
   }
   
   try {
