@@ -77,53 +77,74 @@ async function buildApp() {
 
   // Auth routes
   fastify.post('/auth/login', async (request, reply) => {
-    const { email, password, tenantSlug } = request.body as {
-      email: string;
-      password: string;
-      tenantSlug?: string;
-    };
+    try {
+      const { email, password, tenantSlug } = request.body as {
+        email: string;
+        password: string;
+        tenantSlug?: string;
+      };
 
-    if (!email || !password) {
-      return reply.code(400).send({ error: 'Email and password required' });
-    }
-
-    // Find tenant if slug provided
-    let tenant = null;
-    if (tenantSlug) {
-      tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-      if (!tenant) {
-        return reply.code(404).send({ error: 'Tenant not found' });
+      if (!email || !password) {
+        logger.warn('Login attempt without email or password');
+        return reply.code(400).send({ error: 'Email and password required' });
       }
+
+      logger.info({ email, hasTenantSlug: !!tenantSlug }, 'Login attempt');
+
+      // Find tenant if slug provided, otherwise try to find user in any tenant
+      let tenant = null;
+      if (tenantSlug) {
+        tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+        if (!tenant) {
+          logger.warn({ tenantSlug }, 'Tenant not found');
+          return reply.code(404).send({ error: 'Tenant not found' });
+        }
+      }
+
+      // Find user - if no tenant specified, search in all tenants
+      const user = await prisma.user.findFirst({
+        where: {
+          email,
+          ...(tenant && { tenantId: tenant.id })
+        },
+        include: { tenant: true }
+      });
+
+      if (!user) {
+        logger.warn({ email }, 'User not found');
+        return reply.code(401).send({ error: 'Invalid credentials' });
+      }
+
+      if (!user.active) {
+        logger.warn({ email, userId: user.id }, 'User is inactive');
+        return reply.code(401).send({ error: 'Invalid credentials' });
+      }
+
+      logger.info({ email, userId: user.id, tenantId: user.tenantId }, 'User found, verifying password');
+
+      // Verify password
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) {
+        logger.warn({ email, userId: user.id }, 'Invalid password');
+        return reply.code(401).send({ error: 'Invalid credentials' });
+      }
+
+      logger.info({ email, userId: user.id }, 'Password valid, generating token');
+
+      // Generate JWT
+      const token = fastify.jwt.sign({
+        userId: user.id,
+        tenantId: user.tenantId,
+        email: user.email,
+        role: user.role
+      });
+
+      logger.info({ email, userId: user.id }, 'Login successful');
+      return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role, tenantId: user.tenantId } };
+    } catch (error) {
+      logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Login error');
+      return reply.code(500).send({ error: 'Internal server error' });
     }
-
-    // Find user
-    const user = await prisma.user.findFirst({
-      where: {
-        email,
-        ...(tenant && { tenantId: tenant.id })
-      },
-      include: { tenant: true }
-    });
-
-    if (!user || !user.active) {
-      return reply.code(401).send({ error: 'Invalid credentials' });
-    }
-
-    // Verify password
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
-      return reply.code(401).send({ error: 'Invalid credentials' });
-    }
-
-    // Generate JWT
-    const token = fastify.jwt.sign({
-      userId: user.id,
-      tenantId: user.tenantId,
-      email: user.email,
-      role: user.role
-    });
-
-    return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role, tenantId: user.tenantId } };
   });
 
   // AI Triage - INTERNAL ENDPOINT (no auth required, uses internal token)
