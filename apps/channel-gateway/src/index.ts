@@ -33,23 +33,12 @@ fastify.addHook('onRequest', async (request, reply) => {
   }
 });
 
-// Rate limiting - SOLO para rutas que NO sean webhooks, debug o health
-// IMPORTANTE: Los webhooks NO deben tener rate limiting porque vienen de servicios externos
-fastify.register(rateLimit, {
-  max: 100,
-  timeWindow: '1 minute',
-  skip: (request: { url: string }) => {
-    // No aplicar rate limiting a endpoints públicos y webhooks
-    const url = request.url.split('?')[0]; // Remover query params
-    const publicRoutes = ['/health', '/debug', '/webhooks'];
-    const shouldSkip = publicRoutes.some(route => url.startsWith(route));
-    if (shouldSkip) {
-      logger.info({ url }, '✅ Skipping rate limit for webhook/public route');
-      return true; // IMPORTANTE: retornar true explícitamente
-    }
-    return false;
-  }
-} as Parameters<typeof fastify.register>[1]);
+// Rate limiting TEMPORALMENTE DESHABILITADO para debug
+// TODO: Re-habilitar después de resolver el problema del 401
+// fastify.register(rateLimit, {
+//   max: 100,
+//   timeWindow: '1 minute'
+// });
 
 // Helper: Generate idempotency key from payload
 function generateIdempotencyKey(source: string, payload: unknown): string {
