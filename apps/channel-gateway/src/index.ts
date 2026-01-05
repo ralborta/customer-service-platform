@@ -1,4 +1,5 @@
 // CHECK #1: Confirmar que este código se está ejecutando - LOGS FORENSES
+console.log("🔥🔥🔥 RUNNING CHANNEL-GATEWAY ONLY 🔥🔥🔥", new Date().toISOString());
 console.log("🔥 ENTRYPOINT: CHANNEL-GATEWAY 🔥");
 console.log("CWD:", process.cwd());
 console.log("ARGV:", process.argv);
