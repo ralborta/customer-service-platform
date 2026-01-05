@@ -767,12 +767,20 @@ async function start() {
         // Ejecutar db push
         logger.info('📦 Paso 2: Creando/actualizando tablas (db push)...');
         logger.info('📦 Ejecutando: npx prisma db push --accept-data-loss');
-        execSync('npx prisma db push --accept-data-loss', { 
-          stdio: 'inherit',
-          cwd: dbDir,
-          env: { ...process.env }
-        });
-        logger.info('✅ db:push completado');
+        try {
+          execSync('npx prisma db push --accept-data-loss', { 
+            stdio: 'inherit',
+            cwd: dbDir,
+            env: { ...process.env },
+            timeout: 60000 // 60 segundos timeout
+          });
+          logger.info('✅ db:push completado');
+        } catch (dbPushError) {
+          logger.error('❌ Error en db:push:', dbPushError);
+          // Si db:push falla, intentar continuar de todas formas
+          // Puede que las tablas ya existan
+          logger.warn('⚠️ db:push falló, pero continuando... Las tablas pueden ya existir.');
+        }
         
         // Verificar que las tablas se crearon
         logger.info('🔍 Verificando que las tablas existen...');
@@ -783,11 +791,18 @@ async function start() {
             WHERE table_schema = 'public' 
             AND table_name IN ('tenants', 'users', 'conversations', 'messages')
           `;
-          logger.info(`✅ Tablas encontradas: ${(tableCheck as any[]).length}`);
+          const tableCount = (tableCheck as any[]).length;
+          logger.info(`✅ Tablas encontradas: ${tableCount}`);
           (tableCheck as any[]).forEach((t: any) => {
             logger.info(`   - ${t.table_name}`);
           });
+          
+          if (tableCount === 0) {
+            logger.warn('⚠️ No se encontraron tablas. Puede que db:push haya fallado.');
+            logger.warn('⚠️ El servicio continuará, pero puede fallar al procesar requests.');
+          }
         } catch (err) {
+          logger.error('❌ Error al verificar tablas:', err);
           logger.warn('⚠️ No se pudo verificar tablas, pero continuando...');
         }
         
