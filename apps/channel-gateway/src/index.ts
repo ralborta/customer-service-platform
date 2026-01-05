@@ -241,6 +241,7 @@ async function getOrCreateConversation(
 fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
   const startTime = Date.now();
   let tenantId: string | null = null;
+  let eventLog: any = null;
   
   try {
     const body = request.body as unknown;
