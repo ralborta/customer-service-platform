@@ -713,22 +713,38 @@ async function start() {
 
   // Inicializar DB si es necesario (solo primera vez)
   if (process.env.DB_INIT === 'true') {
-    try {
-      logger.info('🔄 ============================================');
-      logger.info('🔄 INICIANDO INICIALIZACIÓN DE BASE DE DATOS');
-      logger.info('🔄 ============================================');
-      
-      const { execSync } = require('child_process');
-      const path = require('path');
-      const fs = require('fs');
-      
-      // Obtener el directorio raíz del monorepo
-      const rootDir = path.resolve(__dirname, '../../..');
-      const dbDir = path.resolve(rootDir, 'packages/db');
-      
-      logger.info(`📁 Directorio raíz: ${rootDir}`);
-      logger.info(`📁 Directorio DB: ${dbDir}`);
-      logger.info(`🔗 DATABASE_URL configurado: ${process.env.DATABASE_URL ? 'SÍ' : 'NO'}`);
+    // Verificar DATABASE_URL ANTES de intentar inicializar
+    if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === '') {
+      logger.error('❌ ============================================');
+      logger.error('❌ ERROR CRÍTICO: DATABASE_URL NO CONFIGURADO');
+      logger.error('❌ ============================================');
+      logger.error('💡 Para solucionarlo:');
+      logger.error('   1. Ve a Railway → PostgreSQL Service → Variables');
+      logger.error('   2. Copia el valor de DATABASE_URL');
+      logger.error('   3. Ve a Railway → API Service → Variables');
+      logger.error('   4. Agrega: DATABASE_URL=<valor_copiado>');
+      logger.error('   5. Reinicia el servicio API');
+      logger.error('❌ ============================================');
+      logger.error('❌ No se puede inicializar la DB sin DATABASE_URL');
+      logger.error('❌ El servicio continuará pero fallará al procesar webhooks');
+      logger.error('❌ ============================================');
+    } else {
+      try {
+        logger.info('🔄 ============================================');
+        logger.info('🔄 INICIANDO INICIALIZACIÓN DE BASE DE DATOS');
+        logger.info('🔄 ============================================');
+        
+        const { execSync } = require('child_process');
+        const path = require('path');
+        const fs = require('fs');
+        
+        // Obtener el directorio raíz del monorepo
+        const rootDir = path.resolve(__dirname, '../../..');
+        const dbDir = path.resolve(rootDir, 'packages/db');
+        
+        logger.info(`📁 Directorio raíz: ${rootDir}`);
+        logger.info(`📁 Directorio DB: ${dbDir}`);
+        logger.info(`🔗 DATABASE_URL configurado: SÍ (${process.env.DATABASE_URL.substring(0, 20)}...)`);
       
       // Verificar que el directorio de Prisma existe
       const schemaPath = path.join(dbDir, 'prisma/schema.prisma');
