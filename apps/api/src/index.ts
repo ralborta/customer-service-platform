@@ -104,106 +104,46 @@ async function buildApp() {
   // Auth routes
   fastify.post('/auth/login', async (request, reply) => {
     try {
-      const body = request.body as any;
-      logger.info({ body: JSON.stringify(body) }, 'Raw login request body');
-      
-      const { email, password, tenantSlug } = body as {
+      const { email, password, tenantSlug } = request.body as {
         email: string;
         password: string;
         tenantSlug?: string;
       };
 
       if (!email || !password) {
-        logger.warn({ email: !!email, password: !!password }, 'Login attempt without email or password');
         return reply.code(400).send({ error: 'Email and password required' });
       }
 
-      logger.info({ email, passwordLength: password.length, hasTenantSlug: !!tenantSlug }, 'Login attempt');
-
-      // Find user - buscar primero en tenant "demo", luego en cualquier tenant
-      // Esto es importante porque el usuario agent@demo.com está en el tenant "demo"
-      let user = null;
+      // Buscar tenant (si se especifica, usar ese; si no, usar "demo" por defecto)
+      const slug = tenantSlug || 'demo';
+      const tenant = await prisma.tenant.findUnique({ where: { slug } });
       
-      // Primero intentar en tenant "demo"
-      const demoTenant = await prisma.tenant.findUnique({ where: { slug: 'demo' } });
-      if (demoTenant) {
-        user = await prisma.user.findUnique({
-          where: {
-            tenantId_email: {
-              tenantId: demoTenant.id,
-              email
-            }
-          },
-          include: { tenant: true }
-        });
-        logger.info({ email, foundInDemo: !!user, tenantId: demoTenant.id }, 'Searching in demo tenant');
-      }
-      
-      // Si no se encontró y se especificó un tenant, buscar ahí
-      if (!user && tenantSlug) {
-        const specifiedTenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-        if (specifiedTenant) {
-          user = await prisma.user.findUnique({
-            where: {
-              tenantId_email: {
-                tenantId: specifiedTenant.id,
-                email
-              }
-            },
-            include: { tenant: true }
-          });
-          logger.info({ email, foundInSpecified: !!user, tenantSlug }, 'Searching in specified tenant');
-        } else {
-          logger.warn({ tenantSlug }, 'Specified tenant not found');
-        }
-      }
-      
-      // Si aún no se encontró, buscar en cualquier tenant (fallback)
-      if (!user) {
-        user = await prisma.user.findFirst({
-          where: { email },
-          include: { tenant: true }
-        });
-        logger.info({ email, foundAnywhere: !!user }, 'Searching in any tenant (fallback)');
-      }
-
-      if (!user) {
-        logger.warn({ email }, 'User not found');
+      if (!tenant) {
+        logger.warn({ slug }, 'Tenant not found');
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
-      if (!user.active) {
-        logger.warn({ email, userId: user.id }, 'User is inactive');
+      // Buscar usuario en ese tenant
+      const user = await prisma.user.findUnique({
+        where: {
+          tenantId_email: {
+            tenantId: tenant.id,
+            email
+          }
+        },
+        include: { tenant: true }
+      });
+
+      if (!user || !user.active) {
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
-      logger.info({ 
-        email, 
-        userId: user.id, 
-        tenantId: user.tenantId,
-        userActive: user.active,
-        passwordHashLength: user.password.length,
-        passwordHashStart: user.password.substring(0, 20)
-      }, 'User found, verifying password');
-
-      // Verify password
-      logger.info({ email }, 'Comparing password with bcrypt...');
+      // Verificar password
       const valid = await bcrypt.compare(password, user.password);
-      logger.info({ email, valid }, 'Password comparison result');
       
       if (!valid) {
-        // Intentar verificar si el password está en texto plano (por si acaso)
-        const isPlainText = password === user.password;
-        logger.warn({ 
-          email, 
-          userId: user.id,
-          isPlainText,
-          passwordMatchesPlainText: isPlainText
-        }, 'Invalid password');
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
-
-      logger.info({ email, userId: user.id }, 'Password valid, generating token');
 
       // Generate JWT
       const token = fastify.jwt.sign({
