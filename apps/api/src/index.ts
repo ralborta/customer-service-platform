@@ -6,6 +6,7 @@ import { authenticate, type AuthUser } from './middleware/auth';
 import { performTriage } from './services/triage';
 import { getTrackingProvider } from './services/tracking';
 import { TriageRequestSchema, TrackingLookupSchema, CreateQuoteSchema } from '@customer-service/shared';
+import { builderbotAdapter } from '@customer-service/shared';
 import * as bcrypt from 'bcryptjs';
 import pino from 'pino';
 
@@ -218,21 +219,72 @@ async function buildApp() {
     };
 
     const conversation = await prisma.conversation.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        customer: true
+      }
     });
 
     if (!conversation || conversation.tenantId !== user.tenantId) {
       return reply.code(404).send({ error: 'Conversation not found' });
     }
 
+    const messageDirection = direction || 'OUTBOUND';
+    const messageChannel = channel || conversation.primaryChannel;
+
+    // Si es mensaje OUTBOUND y el canal es WhatsApp, enviar por Builderbot
+    let builderbotMessageId: string | undefined;
+    if (messageDirection === 'OUTBOUND' && messageChannel === 'WHATSAPP' && conversation.customer.phoneNumber) {
+      try {
+        const result = await builderbotAdapter.sendText(
+          conversation.customer.phoneNumber,
+          text,
+          {
+            metadata: {
+              conversationId: conversation.id,
+              sentBy: user.userId,
+              tenantId: user.tenantId
+            }
+          }
+        );
+
+        if (result.success && result.messageId) {
+          builderbotMessageId = result.messageId;
+          logger.info({ messageId: result.messageId, phoneNumber: conversation.customer.phoneNumber }, 'Message sent via Builderbot');
+        } else {
+          logger.error({ error: result.error }, 'Failed to send message via Builderbot');
+          return reply.code(500).send({ 
+            error: 'Failed to send message via WhatsApp', 
+            details: result.error 
+          });
+        }
+      } catch (error) {
+        logger.error(error, 'Error sending message via Builderbot');
+        return reply.code(500).send({ 
+          error: 'Error sending message via WhatsApp',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    // Guardar mensaje en DB
     const message = await prisma.message.create({
       data: {
         conversationId: id,
-        channel: channel || conversation.primaryChannel,
-        direction: direction || 'OUTBOUND',
+        channel: messageChannel,
+        direction: messageDirection,
         text,
-        metadata: { sentBy: user.userId }
+        metadata: { 
+          sentBy: user.userId,
+          ...(builderbotMessageId && { builderbotMessageId })
+        }
       }
+    });
+
+    // Actualizar última actualización de la conversación
+    await prisma.conversation.update({
+      where: { id },
+      data: { updatedAt: new Date() }
     });
 
     return message;
