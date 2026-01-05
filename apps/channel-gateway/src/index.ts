@@ -25,7 +25,15 @@ fastify.register(cors, {
   origin: true
 });
 
-// Rate limiting - excluir endpoints de debug, health y webhooks
+// Hook ANTES de todo para debug
+fastify.addHook('onRequest', async (request, reply) => {
+  if (request.url.startsWith('/webhooks/builderbot/whatsapp')) {
+    logger.info('🔵🔵🔵 ONREQUEST HOOK EJECUTADO 🔵🔵🔵');
+    logger.info({ url: request.url, method: request.method }, 'Request intercepted by onRequest hook');
+  }
+});
+
+// Rate limiting - TEMPORALMENTE DESHABILITADO para webhooks
 // IMPORTANTE: Los webhooks NO deben tener rate limiting porque vienen de servicios externos
 fastify.register(rateLimit, {
   max: 100,
