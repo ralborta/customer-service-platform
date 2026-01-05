@@ -33,7 +33,7 @@ fastify.addHook('onRequest', async (request, reply) => {
   }
 });
 
-// Rate limiting - TEMPORALMENTE DESHABILITADO para webhooks
+// Rate limiting - SOLO para rutas que NO sean webhooks, debug o health
 // IMPORTANTE: Los webhooks NO deben tener rate limiting porque vienen de servicios externos
 fastify.register(rateLimit, {
   max: 100,
@@ -44,9 +44,10 @@ fastify.register(rateLimit, {
     const publicRoutes = ['/health', '/debug', '/webhooks'];
     const shouldSkip = publicRoutes.some(route => url.startsWith(route));
     if (shouldSkip) {
-      logger.debug({ url }, 'Skipping rate limit for public route');
+      logger.info({ url }, '✅ Skipping rate limit for webhook/public route');
+      return true; // IMPORTANTE: retornar true explícitamente
     }
-    return shouldSkip;
+    return false;
   }
 } as Parameters<typeof fastify.register>[1]);
 
