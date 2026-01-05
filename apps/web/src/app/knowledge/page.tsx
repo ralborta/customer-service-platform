@@ -56,7 +56,7 @@ export default function KnowledgePage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Knowledge Base</h1>
+          <h1 className="text-3xl font-bold">Información</h1>
           <p className="text-muted-foreground">Base de conocimientos</p>
         </div>
         <Link href="/knowledge/new">
@@ -71,7 +71,7 @@ export default function KnowledgePage() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Buscar en knowledge base..."
+            placeholder="Buscar información..."
             className="flex-1 px-3 py-2 border rounded-md"
           />
           <Button onClick={handleSearch}>Buscar</Button>

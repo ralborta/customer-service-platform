@@ -20,7 +20,7 @@ import {
 const menuItems = [
   { href: '/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/tickets', label: 'Tickets', icon: Ticket },
-  { href: '/knowledge', label: 'Knowledge Base', icon: BookOpen },
+  { href: '/knowledge', label: 'Información', icon: BookOpen },
   { href: '/tracking', label: 'Tracking', icon: Package },
   { href: '/quotes', label: 'Quotes', icon: FileText },
   { href: '/surveys', label: 'Surveys', icon: BarChart3 },

@@ -39,7 +39,7 @@ export default function NewArticlePage() {
     <div>
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Nuevo Artículo</h1>
-        <p className="text-muted-foreground">Crear artículo en Knowledge Base</p>
+        <p className="text-muted-foreground">Crear artículo de información</p>
       </div>
 
       <Card>
