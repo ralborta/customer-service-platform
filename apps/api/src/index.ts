@@ -385,74 +385,104 @@ async function buildApp() {
 
   // Conversations
   fastify.get('/conversations', async (request, reply) => {
-    const user = request.user as AuthUser;
-    const { status, priority, channel, assignedTo } = request.query as Record<string, string>;
+    try {
+      const user = request.user as AuthUser;
+      const { status, priority, channel, assignedTo } = request.query as Record<string, string>;
 
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        tenantId: user.tenantId,
-        ...(status && { status }),
-        ...(priority && { priority }),
-        ...(channel && { primaryChannel: channel }),
-        ...(assignedTo && { assignedToId: assignedTo })
-      },
-      include: {
-        customer: true,
-        assignedTo: true,
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
+      const conversations = await prisma.conversation.findMany({
+        where: {
+          tenantId: user.tenantId,
+          ...(status && { status }),
+          ...(priority && { priority }),
+          ...(channel && { primaryChannel: channel }),
+          ...(assignedTo && { assignedToId: assignedTo })
         },
-        _count: {
-          select: { messages: true, tickets: true }
-        }
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 100
-    });
+        include: {
+          customer: true,
+          assignedTo: true,
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1
+          },
+          _count: {
+            select: { messages: true, tickets: true }
+          }
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 100
+      });
 
-    return conversations;
+      return conversations;
+    } catch (error) {
+      logger.error({ error, userId: (request.user as AuthUser)?.userId }, 'Error loading conversations');
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
   });
 
   fastify.get('/conversations/:id', async (request, reply) => {
-    const user = request.user as AuthUser;
-    const { id } = request.params as { id: string };
+    try {
+      const user = request.user as AuthUser;
+      const { id } = request.params as { id: string };
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id },
-      include: {
-        customer: true,
-        assignedTo: true,
-        messages: {
-          orderBy: { createdAt: 'asc' }
-        },
-        tickets: {
-          include: {
-            assignedTo: true,
-            events: {
-              orderBy: { createdAt: 'desc' },
-              take: 10
+      logger.info({ conversationId: id, userId: user.userId }, 'Loading conversation');
+
+      const conversation = await prisma.conversation.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          assignedTo: true,
+          messages: {
+            orderBy: { createdAt: 'asc' }
+          },
+          tickets: {
+            include: {
+              assignedTo: true,
+              events: {
+                orderBy: { createdAt: 'desc' },
+                take: 10
+              }
             }
-          }
-        },
-        callSessions: {
-          orderBy: { startedAt: 'desc' }
-        },
-        shipments: {
-          include: {
-            events: {
-              orderBy: { occurredAt: 'desc' }
+          },
+          callSessions: {
+            orderBy: { startedAt: 'desc' }
+          },
+          shipments: {
+            include: {
+              events: {
+                orderBy: { occurredAt: 'desc' }
+              }
             }
           }
         }
+      });
+
+      if (!conversation) {
+        logger.warn({ conversationId: id, userId: user.userId }, 'Conversation not found');
+        return reply.code(404).send({ error: 'Conversation not found' });
       }
-    });
 
-    if (!conversation || conversation.tenantId !== user.tenantId) {
-      return reply.code(404).send({ error: 'Conversation not found' });
+      if (conversation.tenantId !== user.tenantId) {
+        logger.warn({ conversationId: id, userId: user.userId, conversationTenantId: conversation.tenantId, userTenantId: user.tenantId }, 'Conversation tenant mismatch');
+        return reply.code(404).send({ error: 'Conversation not found' });
+      }
+
+      logger.info({ conversationId: id, messagesCount: conversation.messages.length }, 'Conversation loaded successfully');
+      return conversation;
+    } catch (error) {
+      logger.error({ 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        conversationId: (request.params as { id: string })?.id,
+        userId: (request.user as AuthUser)?.userId
+      }, 'Error loading conversation');
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
+      });
     }
-
-    return conversation;
   });
 
   // Messages
