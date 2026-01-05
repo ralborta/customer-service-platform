@@ -101,6 +101,121 @@ async function buildApp() {
     }
   });
 
+  // Debug endpoint - DIAGNÓSTICO COMPLETO DE LOGIN
+  fastify.get('/debug/login-status', async (request, reply) => {
+    try {
+      const email = 'agent@demo.com';
+      const password = 'admin123';
+      
+      // 1. Verificar tenant demo
+      const demoTenant = await prisma.tenant.findUnique({ where: { slug: 'demo' } });
+      
+      // 2. Verificar usuario
+      let user = null;
+      if (demoTenant) {
+        user = await prisma.user.findUnique({
+          where: {
+            tenantId_email: {
+              tenantId: demoTenant.id,
+              email
+            }
+          }
+        });
+      }
+      
+      // 3. Verificar password
+      let passwordValid = false;
+      if (user) {
+        passwordValid = await bcrypt.compare(password, user.password);
+      }
+      
+      return {
+        tenant: demoTenant ? {
+          id: demoTenant.id,
+          slug: demoTenant.slug,
+          name: demoTenant.name,
+          exists: true
+        } : { exists: false },
+        user: user ? {
+          id: user.id,
+          email: user.email,
+          active: user.active,
+          role: user.role,
+          tenantId: user.tenantId,
+          exists: true,
+          passwordHashLength: user.password.length
+        } : { exists: false },
+        password: {
+          testPassword: password,
+          valid: passwordValid
+        },
+        status: demoTenant && user && user.active && passwordValid ? 'OK' : 'ERROR',
+        message: !demoTenant ? 'Tenant demo no existe' :
+                 !user ? 'Usuario no existe' :
+                 !user.active ? 'Usuario inactivo' :
+                 !passwordValid ? 'Password incorrecto' :
+                 'Todo OK'
+      };
+    } catch (error) {
+      logger.error({ error }, 'Debug login status error');
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Debug endpoint - FIJAR PASSWORD (solo para desarrollo)
+  fastify.post('/debug/fix-password', async (request, reply) => {
+    try {
+      const { email = 'agent@demo.com', password = 'admin123' } = request.body as { email?: string; password?: string };
+      
+      // Buscar tenant demo
+      const demoTenant = await prisma.tenant.findUnique({ where: { slug: 'demo' } });
+      if (!demoTenant) {
+        return reply.code(404).send({ error: 'Tenant demo no existe' });
+      }
+      
+      // Buscar usuario
+      const user = await prisma.user.findUnique({
+        where: {
+          tenantId_email: {
+            tenantId: demoTenant.id,
+            email
+          }
+        }
+      });
+      
+      if (!user) {
+        return reply.code(404).send({ error: 'Usuario no existe' });
+      }
+      
+      // Regenerar password hash
+      const newHash = await bcrypt.hash(password, 10);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { password: newHash, active: true }
+      });
+      
+      // Verificar que funciona
+      const isValid = await bcrypt.compare(password, newHash);
+      
+      return {
+        success: true,
+        email,
+        passwordUpdated: true,
+        passwordValid: isValid,
+        message: 'Password actualizado correctamente'
+      };
+    } catch (error) {
+      logger.error({ error }, 'Fix password error');
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Auth routes
   fastify.post('/auth/login', async (request, reply) => {
     try {
@@ -119,7 +234,7 @@ async function buildApp() {
       const tenant = await prisma.tenant.findUnique({ where: { slug } });
       
       if (!tenant) {
-        logger.warn({ slug }, 'Tenant not found');
+        logger.error({ slug, email }, '❌ Tenant not found');
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
@@ -134,7 +249,13 @@ async function buildApp() {
         include: { tenant: true }
       });
 
-      if (!user || !user.active) {
+      if (!user) {
+        logger.error({ email, tenantSlug: slug, tenantId: tenant.id }, '❌ User not found');
+        return reply.code(401).send({ error: 'Invalid credentials' });
+      }
+
+      if (!user.active) {
+        logger.error({ email, userId: user.id }, '❌ User inactive');
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
@@ -142,8 +263,16 @@ async function buildApp() {
       const valid = await bcrypt.compare(password, user.password);
       
       if (!valid) {
+        logger.error({ 
+          email, 
+          userId: user.id,
+          passwordHashLength: user.password.length,
+          passwordHashStart: user.password.substring(0, 20)
+        }, '❌ Password invalid');
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
+
+      logger.info({ email, userId: user.id, tenantId: user.tenantId }, '✅ Login successful');
 
       // Generate JWT
       const token = fastify.jwt.sign({
