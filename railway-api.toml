@@ -6,6 +6,6 @@ builder = "NIXPACKS"
 buildCommand = "pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/db build && pnpm --filter @customer-service/api build"
 
 [deploy]
-startCommand = "cd apps/api && pnpm start"
+startCommand = "cd apps/api && DB_INIT=true pnpm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 100
