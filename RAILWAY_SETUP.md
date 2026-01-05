@@ -57,6 +57,9 @@ CREATE EXTENSION IF NOT EXISTS vector;
 # Base de Datos (compartida con todos los servicios)
 DATABASE_URL=postgresql://postgres:password@host:port/railway
 
+# Inicialización automática de DB (IMPORTANTE: activar en el primer deploy)
+DB_INIT=true
+
 # Builderbot (OBLIGATORIO para WhatsApp)
 BUILDERBOT_API_URL=https://api.builderbot.cloud
 BUILDERBOT_API_KEY=tu_api_key_de_builderbot
@@ -69,6 +72,8 @@ INTERNAL_API_TOKEN=token-interno-opcional
 # Puerto (Railway lo asigna automáticamente)
 PORT=3001
 ```
+
+**IMPORTANTE**: Configura `DB_INIT=true` en el servicio **API** para que las tablas se creen automáticamente en el primer deploy.
 
 ### Obtener la URL pública:
 1. Click en el servicio Channel Gateway
@@ -150,9 +155,23 @@ OPENAI_API_KEY=tu_openai_key_opcional
 
 ## Configuración Inicial de la Base de Datos
 
-Una vez que todos los servicios estén corriendo:
+### ✅ Automático (Recomendado)
 
-### Opción 1: Desde tu máquina local
+**Las tablas se crean automáticamente** cuando configuras `DB_INIT=true` en el servicio API:
+
+1. En el servicio **API** en Railway
+2. Ve a **Settings** → **Variables**
+3. Agrega: `DB_INIT=true`
+4. Al hacer deploy, automáticamente:
+   - Crea todas las tablas (18 tablas)
+   - Ejecuta el seed con datos demo (si es la primera vez)
+
+**Nota**: Después del primer deploy exitoso, puedes quitar `DB_INIT=true` o dejarlo (solo hace seed si no hay datos).
+
+### Opción Manual (si prefieres)
+
+Si prefieres hacerlo manualmente:
+
 ```bash
 # Conecta DATABASE_URL de Railway
 export DATABASE_URL="postgresql://postgres:password@host:port/railway"
@@ -162,22 +181,6 @@ pnpm db:push
 
 # Seed datos demo
 pnpm db:seed
-```
-
-### Opción 2: Desde Railway (usando Railway CLI)
-```bash
-# Instalar Railway CLI
-npm i -g @railway/cli
-
-# Login
-railway login
-
-# Link al proyecto
-railway link
-
-# Ejecutar comandos en el contexto de Railway
-railway run pnpm db:push
-railway run pnpm db:seed
 ```
 
 ---
@@ -256,6 +259,7 @@ Si Builderbot usa un formato diferente, necesitarás ajustar el schema en `packa
 
 ### API
 - `DATABASE_URL`
+- `DB_INIT=true` ⭐ (para crear tablas automáticamente)
 - `JWT_SECRET`
 - `CORS_ORIGIN`
 - `BUILDERBOT_API_URL` (opcional, si envías desde API)
@@ -277,9 +281,10 @@ Si Builderbot usa un formato diferente, necesitarás ajustar el schema en `packa
 - [ ] Configurar variables de Builderbot en Channel Gateway ⭐
 - [ ] Obtener URL pública del Channel Gateway
 - [ ] Crear servicio API
+- [ ] Configurar `DB_INIT=true` en API ⭐ (crea tablas automáticamente)
 - [ ] Configurar `JWT_SECRET` y `CORS_ORIGIN` en API
 - [ ] Crear servicio Worker
-- [ ] Ejecutar `pnpm db:push` y `pnpm db:seed`
+- [ ] Hacer deploy del API (las tablas se crean automáticamente)
 - [ ] Configurar webhook en Builderbot con URL del Channel Gateway
 - [ ] Probar enviando un mensaje de prueba
 
