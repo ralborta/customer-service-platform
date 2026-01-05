@@ -1,0 +1,12 @@
+# Railway config for Channel Gateway service
+# This file MUST be in apps/channel-gateway/ directory
+# And Root Directory in Railway MUST be set to apps/channel-gateway
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "pnpm install --frozen-lockfile && pnpm -C apps/channel-gateway clean || true && pnpm -C apps/channel-gateway build"
+
+[deploy]
+startCommand = "node dist/index.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
