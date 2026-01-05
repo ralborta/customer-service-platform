@@ -27,7 +27,21 @@ export default function LoginPage() {
       localStorage.setItem('token', response.token);
       router.push('/inbox');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
+      const errorMessage = err instanceof Error ? err.message : 'Error al iniciar sesión';
+      console.error('❌ Login error:', err);
+      
+      // Mensaje más específico según el error
+      if (errorMessage.includes('405') || errorMessage.includes('Method Not Allowed')) {
+        setError('Error 405: La URL del API está mal configurada. Verifica NEXT_PUBLIC_API_URL en Vercel.');
+      } else if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+        setError('Error 404: El API no está accesible. Verifica que el API esté corriendo en Railway.');
+      } else if (errorMessage.includes('No se pudo conectar')) {
+        setError('No se puede conectar al API. Verifica NEXT_PUBLIC_API_URL en Vercel.');
+      } else if (errorMessage.includes('401') || errorMessage.includes('Invalid credentials')) {
+        setError('Credenciales incorrectas. Usa: agent@demo.com / admin123');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
