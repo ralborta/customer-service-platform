@@ -31,8 +31,8 @@ interface Conversation {
 
 interface FullConversation extends Conversation {
   messages: Message[];
-  tickets: Array<{ id: string; number: string; status: string; category: string }>;
-  callSessions: Array<{ id: string; startedAt: string; duration: number | null; summary: string | null }>;
+  tickets?: Array<{ id: string; number: string; status: string; category: string }>;
+  callSessions?: Array<{ id: string; startedAt: string; duration: number | null; summary: string | null }>;
 }
 
 export default function InboxPage() {
