@@ -580,7 +580,7 @@ export default function InboxPage() {
                 </div>
 
                 {/* Tickets */}
-                {selectedConversation.tickets.length > 0 && (
+                {selectedConversation.tickets && selectedConversation.tickets.length > 0 && (
                   <div>
                     <h4 className="font-semibold text-xs mb-2.5 text-gray-700 uppercase tracking-wide">Tickets</h4>
                     <div className="space-y-2">
@@ -605,7 +605,7 @@ export default function InboxPage() {
                 )}
 
                 {/* Call Sessions */}
-                {selectedConversation.callSessions.length > 0 && (
+                {selectedConversation.callSessions && selectedConversation.callSessions.length > 0 && (
                   <div>
                     <h4 className="font-semibold text-xs mb-2.5 text-gray-700 uppercase tracking-wide">Calls</h4>
                     <div className="space-y-2">
