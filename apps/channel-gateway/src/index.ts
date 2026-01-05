@@ -61,7 +61,16 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
     });
     
     if (!firstTenant) {
-      logger.warn('No tenants found in database. Creating default tenant automatically...');
+      logger.error('❌ ============================================');
+      logger.error('❌ NO HAY TENANTS EN LA BASE DE DATOS');
+      logger.error('❌ ============================================');
+      logger.error('💡 Esto significa que:');
+      logger.error('   1. El seed no se ejecutó correctamente');
+      logger.error('   2. O DB_INIT=true no está configurado en el API');
+      logger.error('   3. O la DB no tiene tablas creadas');
+      logger.error('❌ ============================================');
+      logger.warn('🔄 Intentando crear tenant por defecto automáticamente...');
+      
       // Crear tenant por defecto si no existe ninguno
       try {
         const defaultTenant = await prisma.tenant.create({
@@ -76,7 +85,8 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
             }
           }
         });
-        logger.info({ tenantId: defaultTenant.id }, 'Default tenant created');
+        logger.info('✅ ============================================');
+        logger.info({ tenantId: defaultTenant.id }, '✅ Default tenant created');
         
         // Crear el ChannelAccount para este tenant
         await prisma.channelAccount.create({
@@ -87,10 +97,19 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
             active: true
           }
         });
-        logger.info({ tenantId: defaultTenant.id, accountKey }, 'ChannelAccount created for default tenant');
+        logger.info({ tenantId: defaultTenant.id, accountKey }, '✅ ChannelAccount created for default tenant');
+        logger.info('✅ ============================================');
         return defaultTenant.id;
       } catch (error) {
-        logger.error({ error }, 'Failed to create default tenant');
+        logger.error('❌ ============================================');
+        logger.error('❌ FALLÓ AL CREAR TENANT POR DEFECTO');
+        logger.error('❌ ============================================');
+        logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Detalles:');
+        logger.error('💡 Verifica que:');
+        logger.error('   1. DATABASE_URL esté configurado correctamente');
+        logger.error('   2. Las tablas existan (ejecuta DB_INIT=true en el API)');
+        logger.error('   3. La DB esté accesible');
+        logger.error('❌ ============================================');
         return null;
       }
     }

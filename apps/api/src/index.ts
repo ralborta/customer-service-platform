@@ -714,20 +714,65 @@ async function start() {
   // Inicializar DB si es necesario (solo primera vez)
   if (process.env.DB_INIT === 'true') {
     try {
-      logger.info('🔄 Inicializando base de datos...');
+      logger.info('🔄 ============================================');
+      logger.info('🔄 INICIANDO INICIALIZACIÓN DE BASE DE DATOS');
+      logger.info('🔄 ============================================');
+      
       const { execSync } = require('child_process');
-      execSync('pnpm --filter @customer-service/db db:push', { stdio: 'inherit' });
+      const path = require('path');
+      
+      // Obtener el directorio raíz del monorepo
+      const rootDir = path.resolve(__dirname, '../../..');
+      
+      logger.info(`📁 Directorio raíz: ${rootDir}`);
+      logger.info('📦 Ejecutando: pnpm --filter @customer-service/db db:push');
+      
+      execSync('pnpm --filter @customer-service/db db:push', { 
+        stdio: 'inherit',
+        cwd: rootDir,
+        env: { ...process.env }
+      });
+      
+      logger.info('✅ db:push completado');
       
       // Verificar si hay datos antes de seed
+      logger.info('🔍 Verificando si hay tenants en la DB...');
       const tenantCount = await prisma.tenant.count();
+      logger.info(`📊 Tenants encontrados: ${tenantCount}`);
+      
       if (tenantCount === 0) {
-        logger.info('🌱 Ejecutando seed...');
-        execSync('pnpm --filter @customer-service/db db:seed', { stdio: 'inherit' });
+        logger.info('🌱 No hay tenants, ejecutando seed...');
+        logger.info('📦 Ejecutando: pnpm --filter @customer-service/db db:seed');
+        
+        execSync('pnpm --filter @customer-service/db db:seed', { 
+          stdio: 'inherit',
+          cwd: rootDir,
+          env: { ...process.env }
+        });
+        
+        logger.info('✅ Seed completado');
+        
+        // Verificar nuevamente
+        const newTenantCount = await prisma.tenant.count();
+        logger.info(`📊 Tenants después del seed: ${newTenantCount}`);
+      } else {
+        logger.info('✅ Ya hay tenants en la DB, saltando seed');
       }
-      logger.info('✅ Base de datos inicializada');
+      
+      logger.info('✅ ============================================');
+      logger.info('✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE');
+      logger.info('✅ ============================================');
     } catch (error) {
-      logger.warn(error, 'DB init failed, continuing anyway...');
+      logger.error('❌ ============================================');
+      logger.error('❌ ERROR INICIALIZANDO BASE DE DATOS');
+      logger.error('❌ ============================================');
+      logger.error(error, 'Detalles del error:');
+      logger.error('❌ El servicio continuará, pero puede fallar al procesar webhooks');
+      logger.error('❌ ============================================');
     }
+  } else {
+    logger.info('ℹ️ DB_INIT no está configurado, saltando inicialización');
+    logger.info('ℹ️ Si es la primera vez, configura DB_INIT=true en las Variables');
   }
 
   try {
