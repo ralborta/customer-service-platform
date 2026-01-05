@@ -34,20 +34,30 @@ export async function apiRequest<T>(
   // Construir URL completa
   const url = `${API_URL}${endpoint}`;
   
-  // Log para debug (siempre en desarrollo, o si hay error)
+  // Log para debug (siempre mostrar para ayudar a diagnosticar)
   if (typeof window !== 'undefined') {
     console.log('🌐 API Request:', {
       url,
       endpoint,
       apiUrl: API_URL,
       hasToken: !!token,
-      env: process.env.NODE_ENV
+      env: process.env.NODE_ENV,
+      method: options?.method || 'GET'
     });
     
     // Advertencia si API_URL es localhost en producción
     if (API_URL.includes('localhost') && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-      console.error('⚠️ ADVERTENCIA: NEXT_PUBLIC_API_URL apunta a localhost pero estás en producción');
-      console.error('💡 Configura NEXT_PUBLIC_API_URL en Vercel con la URL de Railway');
+      console.error('❌ ERROR CRÍTICO: NEXT_PUBLIC_API_URL apunta a localhost pero estás en producción');
+      console.error('💡 Ve a Vercel → Settings → Environment Variables');
+      console.error('💡 Agrega: NEXT_PUBLIC_API_URL=https://tu-api.railway.app');
+      console.error('💡 URL actual:', API_URL);
+    }
+    
+    // Advertencia si API_URL parece estar mal formada
+    if (!API_URL.startsWith('http://') && !API_URL.startsWith('https://')) {
+      console.error('❌ ERROR: NEXT_PUBLIC_API_URL no es una URL válida');
+      console.error('💡 Debe empezar con http:// o https://');
+      console.error('💡 URL actual:', API_URL);
     }
   }
   
