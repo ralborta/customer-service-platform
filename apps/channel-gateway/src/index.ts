@@ -51,21 +51,39 @@ function generateIdempotencyKey(source: string, payload: unknown): string {
 
 // Helper: Resolve tenant from header or channel account
 async function resolveTenant(accountKey?: string, tenantId?: string): Promise<string | null> {
+  logger.info({ accountKey, tenantId }, '🔍 resolveTenant called');
+  
   if (tenantId) {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    logger.info({ tenantId, found: !!tenant }, 'Tenant lookup by ID');
     return tenant?.id || null;
   }
+  
   if (accountKey) {
+    // Buscar ChannelAccount
+    logger.info({ accountKey }, 'Buscando ChannelAccount...');
     const account = await prisma.channelAccount.findFirst({
       where: { accountKey, active: true },
       include: { tenant: true }
     });
+    
     if (account) {
+      logger.info({ accountKey, tenantId: account.tenantId, tenantSlug: account.tenant.slug }, '✅ ChannelAccount encontrado');
       return account.tenantId;
     }
     
-    // Fallback: Si no existe el ChannelAccount, usar el primer tenant disponible (para desarrollo)
-    // En producción, deberías crear el ChannelAccount en el seed
+    logger.warn({ accountKey }, '⚠️ ChannelAccount not found, buscando todos los ChannelAccounts...');
+    
+    // Debug: ver todos los ChannelAccounts
+    const allAccounts = await prisma.channelAccount.findMany({
+      include: { tenant: true }
+    });
+    logger.info({ 
+      totalAccounts: allAccounts.length,
+      accounts: allAccounts.map(a => ({ accountKey: a.accountKey, tenantSlug: a.tenant.slug, active: a.active }))
+    }, 'Todos los ChannelAccounts en la DB');
+    
+    // Fallback: Si no existe el ChannelAccount, usar el primer tenant disponible
     logger.warn({ accountKey }, 'ChannelAccount not found, trying fallback to first tenant');
     const firstTenant = await prisma.tenant.findFirst({
       orderBy: { createdAt: 'asc' }
