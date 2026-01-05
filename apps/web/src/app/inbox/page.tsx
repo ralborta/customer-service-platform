@@ -361,34 +361,35 @@ export default function InboxPage() {
                     </div>
                   ) : (
                     selectedConversation.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div className={`flex gap-2 max-w-[75%] ${message.direction === 'OUTBOUND' ? 'flex-row-reverse' : ''}`}>
-                        {message.direction === 'INBOUND' && (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-[10px] flex-shrink-0">
-                            {getInitials(selectedConversation.customer.name)}
-                          </div>
-                        )}
-                        <div
-                          className={`p-2.5 rounded-lg ${
-                            message.direction === 'OUTBOUND'
-                              ? 'bg-blue-100 text-blue-900 border border-blue-200'
-                              : 'bg-gray-100 text-gray-900 border border-gray-200'
-                          }`}
-                        >
-                          <div className={`text-[11px] mb-1 ${message.direction === 'OUTBOUND' ? 'text-blue-700' : 'text-gray-600'}`}>
-                            {message.direction === 'INBOUND' ? selectedConversation.customer.name : 'You'}
-                          </div>
-                          <p className="text-sm leading-relaxed">{message.text || '(Sin texto)'}</p>
-                          <div className={`text-[10px] mt-1.5 ${message.direction === 'OUTBOUND' ? 'text-blue-600' : 'text-gray-500'}`}>
-                            {getTimeAgo(message.createdAt)}
+                      <div
+                        key={message.id}
+                        className={`flex ${message.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div className={`flex gap-2 max-w-[75%] ${message.direction === 'OUTBOUND' ? 'flex-row-reverse' : ''}`}>
+                          {message.direction === 'INBOUND' && (
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-[10px] flex-shrink-0">
+                              {getInitials(selectedConversation.customer.name)}
+                            </div>
+                          )}
+                          <div
+                            className={`p-2.5 rounded-lg ${
+                              message.direction === 'OUTBOUND'
+                                ? 'bg-blue-100 text-blue-900 border border-blue-200'
+                                : 'bg-gray-100 text-gray-900 border border-gray-200'
+                            }`}
+                          >
+                            <div className={`text-[11px] mb-1 ${message.direction === 'OUTBOUND' ? 'text-blue-700' : 'text-gray-600'}`}>
+                              {message.direction === 'INBOUND' ? selectedConversation.customer.name : 'You'}
+                            </div>
+                            <p className="text-sm leading-relaxed">{message.text || '(Sin texto)'}</p>
+                            <div className={`text-[10px] mt-1.5 ${message.direction === 'OUTBOUND' ? 'text-blue-600' : 'text-gray-500'}`}>
+                              {getTimeAgo(message.createdAt)}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
 
                 {/* Panel de Respuesta Sugerida */}
