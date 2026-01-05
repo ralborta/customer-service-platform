@@ -681,12 +681,13 @@ fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
   }
 });
 
-// Health check
+// Health check - debe ser público (sin autenticación)
 fastify.get('/health', async () => {
   return { status: 'ok', service: 'channel-gateway' };
 });
 
-// Debug endpoint - verificar mensajes en DB
+// Debug endpoints - deben ser públicos (sin autenticación)
+// Estos endpoints NO requieren autenticación para facilitar el debugging
 fastify.get('/debug/messages', async (request, reply) => {
   try {
     const { limit = 10 } = request.query as { limit?: string };
@@ -726,7 +727,7 @@ fastify.get('/debug/messages', async (request, reply) => {
   }
 });
 
-// Debug endpoint - verificar eventos de webhook
+// Debug endpoint - verificar eventos de webhook (público, sin autenticación)
 fastify.get('/debug/events', async (request, reply) => {
   try {
     const { limit = 20 } = request.query as { limit?: string };
