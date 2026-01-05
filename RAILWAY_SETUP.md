@@ -73,7 +73,9 @@ INTERNAL_API_TOKEN=token-interno-opcional
 PORT=3001
 ```
 
-**IMPORTANTE**: Configura `DB_INIT=true` en el servicio **API** para que las tablas se creen automáticamente en el primer deploy.
+**⚠️ CRÍTICO**: Configura `DB_INIT=true` en el servicio **API** para que las tablas se creen automáticamente en el primer deploy.
+
+**Después del primer deploy exitoso**, puedes quitar `DB_INIT=true` para evitar que se ejecute en cada reinicio (opcional).
 
 ### Obtener la URL pública:
 1. Click en el servicio Channel Gateway
