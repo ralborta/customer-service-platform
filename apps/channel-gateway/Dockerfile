@@ -2,19 +2,14 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Copiamos monorepo (porque dependés de packages/)
+# Copiamos SOLO el service root (porque Railway con root directory ya recorta el contexto)
 COPY . .
 
-# Instalación monorepo
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile || pnpm install
 
-# Build de dependencias y del gateway
-RUN pnpm --filter @customer-service/shared build
-RUN pnpm --filter @customer-service/db build
-RUN pnpm --filter @customer-service/channel-gateway build
-
-WORKDIR /app/apps/channel-gateway
+# build
+RUN pnpm run build
 
 ENV NODE_ENV=production
 EXPOSE 8080
