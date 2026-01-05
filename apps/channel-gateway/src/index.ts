@@ -274,15 +274,51 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
     tenantId = await resolveTenant(accountKey);
     
     if (!tenantId) {
+      logger.error('========================================');
+      logger.error('❌ TENANT NOT FOUND - CREANDO POR DEFECTO');
+      logger.error('========================================');
       logger.error({ 
         accountKey, 
         bodyPreview: bodyStr.substring(0, 200),
         error: 'Tenant resolution failed'
-      }, '❌ Tenant not found');
-      return reply.code(401).send({ 
-        error: 'Tenant not found',
-        details: `No tenant found for accountKey: ${accountKey}. Make sure DB_INIT=true was set and seed ran successfully.`
-      });
+      }, '❌ Tenant not found, creando por defecto...');
+      
+      // ÚLTIMO RECURSO: Crear tenant por defecto si no existe ninguno
+      try {
+        const defaultTenant = await prisma.tenant.create({
+          data: {
+            name: 'Default Tenant',
+            slug: 'default',
+            settings: {
+              aiMode: 'ASSISTED',
+              autopilotCategories: ['INFO', 'TRACKING'],
+              confidenceThreshold: 0.7,
+              autopilotCallFollowup: false
+            }
+          }
+        });
+        
+        await prisma.channelAccount.create({
+          data: {
+            tenantId: defaultTenant.id,
+            channel: 'builderbot_whatsapp',
+            accountKey: accountKey || 'builderbot_whatsapp_main',
+            active: true
+          }
+        });
+        
+        tenantId = defaultTenant.id;
+        logger.info({ tenantId: defaultTenant.id }, '✅ Tenant por defecto creado exitosamente');
+      } catch (createError) {
+        logger.error({ 
+          error: createError instanceof Error ? createError.message : String(createError),
+          stack: createError instanceof Error ? createError.stack : undefined
+        }, '❌ FALLÓ crear tenant por defecto');
+        return reply.code(500).send({ 
+          error: 'Database error',
+          details: 'Could not create default tenant. Check database connection.'
+        });
+      }
     }
     
     logger.info({ tenantId, accountKey }, '✅ Tenant resolved successfully');
