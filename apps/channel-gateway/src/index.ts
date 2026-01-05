@@ -143,11 +143,11 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
       }
     }
     
-    logger.info({ tenantId: firstTenant.id, accountKey }, 'Using fallback tenant, creating ChannelAccount');
+    logger.info({ tenantId: firstTenant.id, tenantSlug: firstTenant.slug, accountKey }, '✅ Usando fallback tenant, creando ChannelAccount...');
     
     // Crear el ChannelAccount para futuras requests
     try {
-      await prisma.channelAccount.upsert({
+      const createdAccount = await prisma.channelAccount.upsert({
         where: {
           tenantId_accountKey: {
             tenantId: firstTenant.id,
@@ -162,11 +162,21 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
           active: true
         }
       });
-      logger.info({ tenantId: firstTenant.id, accountKey }, 'ChannelAccount created successfully');
+      logger.info({ 
+        tenantId: firstTenant.id, 
+        tenantSlug: firstTenant.slug,
+        accountKey,
+        channelAccountId: createdAccount.id
+      }, '✅ ChannelAccount creado exitosamente');
       return firstTenant.id;
     } catch (error) {
-      logger.error({ error, accountKey, tenantId: firstTenant.id }, 'Failed to create ChannelAccount');
-      // Aún así retornar el tenantId para que funcione
+      logger.error({ 
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        accountKey, 
+        tenantId: firstTenant.id 
+      }, '❌ Error al crear ChannelAccount, pero retornando tenant de todas formas');
+      // IMPORTANTE: Retornar el tenantId de todas formas para que el webhook pueda procesarse
       return firstTenant.id;
     }
   }
