@@ -26,13 +26,19 @@ fastify.register(cors, {
 });
 
 // Rate limiting - excluir endpoints de debug y health
+// IMPORTANTE: Los endpoints de debug y health NO deben tener rate limiting
 fastify.register(rateLimit, {
   max: 100,
   timeWindow: '1 minute',
   skip: (request) => {
     // No aplicar rate limiting a endpoints públicos
+    const url = request.url.split('?')[0]; // Remover query params
     const publicRoutes = ['/health', '/debug'];
-    return publicRoutes.some(route => request.url.startsWith(route));
+    const shouldSkip = publicRoutes.some(route => url.startsWith(route));
+    if (shouldSkip) {
+      logger.debug({ url }, 'Skipping rate limit for public route');
+    }
+    return shouldSkip;
   }
 });
 
