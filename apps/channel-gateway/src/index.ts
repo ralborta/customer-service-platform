@@ -217,13 +217,20 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
   try {
     const body = request.body as unknown;
     
-    // Log raw body completo para debug (limitado a 1000 chars)
-    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+    // Log COMPLETO del request para debug
+    logger.info('========================================');
+    logger.info('📥 WEBHOOK RECIBIDO');
+    logger.info('========================================');
     logger.info({ 
-      bodyPreview: bodyStr.substring(0, 1000),
+      method: request.method,
+      url: request.url,
+      headers: Object.keys(request.headers),
+      bodyPreview: typeof body === 'string' ? body.substring(0, 1000) : JSON.stringify(body).substring(0, 1000),
       bodyType: typeof body,
       bodyKeys: typeof body === 'object' && body !== null ? Object.keys(body) : []
     }, '📥 Received webhook payload');
+    
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
     
     // Resolve tenant PRIMERO (antes de validar, para tener mejor error)
     const accountKey = (request.headers['x-account-key'] as string) || 
@@ -513,11 +520,15 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const bodyStr = typeof body === 'string' ? body : JSON.stringify(body || {}).substring(0, 200);
+      logger.error('========================================');
+      logger.error('❌ ERROR PROCESANDO WEBHOOK');
+      logger.error('========================================');
       logger.error({ 
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined,
         tenantId,
-        bodyPreview: bodyStr
+        bodyPreview: bodyStr,
+        processingTime: Date.now() - startTime
       }, '❌ Error processing message');
       
       if (eventLog) {
