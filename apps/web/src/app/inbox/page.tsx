@@ -97,8 +97,11 @@ export default function InboxPage() {
       setReplyText('');
       await loadFullConversation(selectedConversation.id);
       await loadConversations();
+      // Mensaje enviado exitosamente (podrías agregar un toast aquí)
     } catch (error) {
       console.error('Error sending message:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error al enviar mensaje';
+      alert(`Error: ${errorMessage}. Verifica que BUILDERBOT_API_KEY esté configurado.`);
     } finally {
       setSending(false);
     }
