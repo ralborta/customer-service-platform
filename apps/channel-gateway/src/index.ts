@@ -1,5 +1,5 @@
 // CHECK #1: Confirmar que este código se está ejecutando
-console.log("BOOT_CHANNEL_GATEWAY__v2026-01-05__A");
+console.log("BOOT_CHANNEL_GATEWAY ✅");
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
