@@ -699,6 +699,11 @@ fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
   }
 });
 
+// PASO 2: Ruta ping ultra simple para probar
+fastify.get('/__ping', async () => {
+  return { ok: true, ts: Date.now() };
+});
+
 // Health check - debe ser público (sin autenticación)
 fastify.get('/health', async () => {
   return { status: 'ok', service: 'channel-gateway' };
