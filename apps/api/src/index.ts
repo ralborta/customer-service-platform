@@ -429,6 +429,8 @@ async function buildApp() {
 
       logger.info({ conversationId: id, userId: user.userId }, 'Loading conversation');
 
+      // Incluir solo las relaciones que existen en la DB
+      // callSessions y shipments pueden no existir aún
       const conversation = await prisma.conversation.findUnique({
         where: { id },
         include: {
@@ -445,17 +447,10 @@ async function buildApp() {
                 take: 10
               }
             }
-          },
-          callSessions: {
-            orderBy: { startedAt: 'desc' }
-          },
-          shipments: {
-            include: {
-              events: {
-                orderBy: { occurredAt: 'desc' }
-              }
-            }
           }
+          // callSessions y shipments removidos temporalmente hasta que las tablas existan
+          // callSessions: { orderBy: { startedAt: 'desc' } },
+          // shipments: { include: { events: { orderBy: { occurredAt: 'desc' } } } }
         }
       });
 
