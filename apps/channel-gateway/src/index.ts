@@ -50,13 +50,16 @@ function generateIdempotencyKey(source: string, payload: unknown): string {
 }
 
 // Helper: Resolve tenant from header or channel account
-async function resolveTenant(accountKey?: string, tenantId?: string): Promise<string | null> {
+// IMPORTANTE: Esta función NUNCA debe retornar null - siempre debe retornar un tenant
+async function resolveTenant(accountKey?: string, tenantId?: string): Promise<string> {
   logger.info({ accountKey, tenantId }, '🔍 resolveTenant called');
   
   if (tenantId) {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-    logger.info({ tenantId, found: !!tenant }, 'Tenant lookup by ID');
-    return tenant?.id || null;
+    if (tenant) {
+      logger.info({ tenantId, tenantSlug: tenant.slug }, '✅ Tenant encontrado por ID');
+      return tenant.id;
+    }
   }
   
   if (accountKey) {
@@ -72,115 +75,64 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
       return account.tenantId;
     }
     
-    logger.warn({ accountKey }, '⚠️ ChannelAccount not found, buscando todos los ChannelAccounts...');
-    
-    // Debug: ver todos los ChannelAccounts
-    const allAccounts = await prisma.channelAccount.findMany({
-      include: { tenant: true }
-    });
-    logger.info({ 
-      totalAccounts: allAccounts.length,
-      accounts: allAccounts.map(a => ({ accountKey: a.accountKey, tenantSlug: a.tenant.slug, active: a.active }))
-    }, 'Todos los ChannelAccounts en la DB');
-    
-    // Fallback: Si no existe el ChannelAccount, usar el primer tenant disponible
-    logger.warn({ accountKey }, 'ChannelAccount not found, trying fallback to first tenant');
-    const firstTenant = await prisma.tenant.findFirst({
-      orderBy: { createdAt: 'asc' }
-    });
-    
-    if (!firstTenant) {
-      logger.error('❌ ============================================');
-      logger.error('❌ NO HAY TENANTS EN LA BASE DE DATOS');
-      logger.error('❌ ============================================');
-      logger.error('💡 Esto significa que:');
-      logger.error('   1. El seed no se ejecutó correctamente');
-      logger.error('   2. O DB_INIT=true no está configurado en el API');
-      logger.error('   3. O la DB no tiene tablas creadas');
-      logger.error('❌ ============================================');
-      logger.warn('🔄 Intentando crear tenant por defecto automáticamente...');
-      
-      // Crear tenant por defecto si no existe ninguno
-      try {
-        const defaultTenant = await prisma.tenant.create({
-          data: {
-            name: 'Default Tenant',
-            slug: 'default',
-            settings: {
-              aiMode: 'ASSISTED',
-              autopilotCategories: ['INFO', 'TRACKING'],
-              confidenceThreshold: 0.7,
-              autopilotCallFollowup: false
-            }
-          }
-        });
-        logger.info('✅ ============================================');
-        logger.info({ tenantId: defaultTenant.id }, '✅ Default tenant created');
-        
-        // Crear el ChannelAccount para este tenant
-        await prisma.channelAccount.create({
-          data: {
-            tenantId: defaultTenant.id,
-            channel: accountKey.includes('builderbot') ? 'builderbot_whatsapp' : 'elevenlabs_calls',
-            accountKey,
-            active: true
-          }
-        });
-        logger.info({ tenantId: defaultTenant.id, accountKey }, '✅ ChannelAccount created for default tenant');
-        logger.info('✅ ============================================');
-        return defaultTenant.id;
-      } catch (error) {
-        logger.error('❌ ============================================');
-        logger.error('❌ FALLÓ AL CREAR TENANT POR DEFECTO');
-        logger.error('❌ ============================================');
-        logger.error({ error: error instanceof Error ? error.message : String(error) }, 'Detalles:');
-        logger.error('💡 Verifica que:');
-        logger.error('   1. DATABASE_URL esté configurado correctamente');
-        logger.error('   2. Las tablas existan (ejecuta DB_INIT=true en el API)');
-        logger.error('   3. La DB esté accesible');
-        logger.error('❌ ============================================');
-        return null;
-      }
-    }
-    
-    logger.info({ tenantId: firstTenant.id, tenantSlug: firstTenant.slug, accountKey }, '✅ Usando fallback tenant, creando ChannelAccount...');
-    
-    // Crear el ChannelAccount para futuras requests
+    logger.warn({ accountKey }, '⚠️ ChannelAccount not found');
+  }
+  
+  // FALLBACK: Buscar cualquier tenant disponible
+  logger.warn('Buscando cualquier tenant disponible...');
+  let tenant = await prisma.tenant.findFirst({
+    orderBy: { createdAt: 'asc' }
+  });
+  
+  if (!tenant) {
+    // ÚLTIMO RECURSO: Crear tenant por defecto
+    logger.warn('🔄 No hay tenants, creando tenant por defecto...');
     try {
-      const createdAccount = await prisma.channelAccount.upsert({
+      tenant = await prisma.tenant.create({
+        data: {
+          name: 'Default Tenant',
+          slug: 'default',
+          settings: {
+            aiMode: 'ASSISTED',
+            autopilotCategories: ['INFO', 'TRACKING'],
+            confidenceThreshold: 0.7,
+            autopilotCallFollowup: false
+          }
+        }
+      });
+      logger.info({ tenantId: tenant.id }, '✅ Tenant por defecto creado');
+    } catch (error) {
+      logger.error({ error }, '❌ FALLÓ crear tenant por defecto');
+      throw new Error('No se pudo crear tenant. Verifica la conexión a la DB.');
+    }
+  }
+  
+  // Crear ChannelAccount si no existe
+  if (accountKey) {
+    try {
+      await prisma.channelAccount.upsert({
         where: {
           tenantId_accountKey: {
-            tenantId: firstTenant.id,
+            tenantId: tenant.id,
             accountKey
           }
         },
         update: { active: true },
         create: {
-          tenantId: firstTenant.id,
+          tenantId: tenant.id,
           channel: accountKey.includes('builderbot') ? 'builderbot_whatsapp' : 'elevenlabs_calls',
           accountKey,
           active: true
         }
       });
-      logger.info({ 
-        tenantId: firstTenant.id, 
-        tenantSlug: firstTenant.slug,
-        accountKey,
-        channelAccountId: createdAccount.id
-      }, '✅ ChannelAccount creado exitosamente');
-      return firstTenant.id;
+      logger.info({ tenantId: tenant.id, accountKey }, '✅ ChannelAccount creado/actualizado');
     } catch (error) {
-      logger.error({ 
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        accountKey, 
-        tenantId: firstTenant.id 
-      }, '❌ Error al crear ChannelAccount, pero retornando tenant de todas formas');
-      // IMPORTANTE: Retornar el tenantId de todas formas para que el webhook pueda procesarse
-      return firstTenant.id;
+      logger.warn({ error }, '⚠️ Error al crear ChannelAccount, pero continuando con tenant');
     }
   }
-  return null;
+  
+  logger.info({ tenantId: tenant.id, tenantSlug: tenant.slug }, '✅ Tenant resuelto');
+  return tenant.id;
 }
 
 // Helper: Get or create customer by phone
@@ -271,54 +223,20 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
       hasXAccountKey: !!request.headers['x-account-key']
     }, '🔍 Resolving tenant for webhook');
     
-    tenantId = await resolveTenant(accountKey);
-    
-    if (!tenantId) {
-      logger.error('========================================');
-      logger.error('❌ TENANT NOT FOUND - CREANDO POR DEFECTO');
-      logger.error('========================================');
+    // resolveTenant NUNCA retorna null - siempre retorna un tenant
+    try {
+      tenantId = await resolveTenant(accountKey);
+      logger.info({ tenantId, accountKey }, '✅ Tenant resolved successfully');
+    } catch (error) {
       logger.error({ 
-        accountKey, 
-        bodyPreview: bodyStr.substring(0, 200),
-        error: 'Tenant resolution failed'
-      }, '❌ Tenant not found, creando por defecto...');
-      
-      // ÚLTIMO RECURSO: Crear tenant por defecto si no existe ninguno
-      try {
-        const defaultTenant = await prisma.tenant.create({
-          data: {
-            name: 'Default Tenant',
-            slug: 'default',
-            settings: {
-              aiMode: 'ASSISTED',
-              autopilotCategories: ['INFO', 'TRACKING'],
-              confidenceThreshold: 0.7,
-              autopilotCallFollowup: false
-            }
-          }
-        });
-        
-        await prisma.channelAccount.create({
-          data: {
-            tenantId: defaultTenant.id,
-            channel: 'builderbot_whatsapp',
-            accountKey: accountKey || 'builderbot_whatsapp_main',
-            active: true
-          }
-        });
-        
-        tenantId = defaultTenant.id;
-        logger.info({ tenantId: defaultTenant.id }, '✅ Tenant por defecto creado exitosamente');
-      } catch (createError) {
-        logger.error({ 
-          error: createError instanceof Error ? createError.message : String(createError),
-          stack: createError instanceof Error ? createError.stack : undefined
-        }, '❌ FALLÓ crear tenant por defecto');
-        return reply.code(500).send({ 
-          error: 'Database error',
-          details: 'Could not create default tenant. Check database connection.'
-        });
-      }
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        accountKey
+      }, '❌ ERROR CRÍTICO: No se pudo resolver tenant');
+      return reply.code(500).send({ 
+        error: 'Database error',
+        details: error instanceof Error ? error.message : 'Could not resolve tenant. Check database connection.'
+      });
     }
     
     logger.info({ tenantId, accountKey }, '✅ Tenant resolved successfully');
