@@ -670,6 +670,25 @@ async function start() {
   }
   isStarting = true;
 
+  // Inicializar DB si es necesario (solo primera vez)
+  if (process.env.DB_INIT === 'true') {
+    try {
+      logger.info('🔄 Inicializando base de datos...');
+      const { execSync } = require('child_process');
+      execSync('pnpm --filter @customer-service/db db:push', { stdio: 'inherit' });
+      
+      // Verificar si hay datos antes de seed
+      const tenantCount = await prisma.tenant.count();
+      if (tenantCount === 0) {
+        logger.info('🌱 Ejecutando seed...');
+        execSync('pnpm --filter @customer-service/db db:seed', { stdio: 'inherit' });
+      }
+      logger.info('✅ Base de datos inicializada');
+    } catch (error) {
+      logger.warn(error, 'DB init failed, continuing anyway...');
+    }
+  }
+
   try {
     const fastify = await buildApp();
     const port = parseInt(process.env.PORT || '3000', 10);
