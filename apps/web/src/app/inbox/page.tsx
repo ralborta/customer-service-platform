@@ -56,13 +56,27 @@ export default function InboxPage() {
 
   async function loadConversations() {
     try {
+      setLoading(true);
       const data = await apiRequest<Conversation[]>('/conversations');
+      console.log('📥 Conversaciones cargadas:', data.length);
       setConversations(data);
       if (data.length > 0 && !selectedConversation) {
         loadFullConversation(data[0].id);
+      } else if (data.length === 0) {
+        console.warn('⚠️ No hay conversaciones en la base de datos');
+        console.warn('💡 Verifica que:');
+        console.warn('   1. Los webhooks de Builderbot estén llegando al Channel Gateway');
+        console.warn('   2. Los mensajes se estén guardando en la DB');
+        console.warn('   3. El API esté accesible desde Vercel');
       }
     } catch (error) {
-      console.error('Error loading conversations:', error);
+      console.error('❌ Error loading conversations:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('💡 Verifica que:');
+      console.error('   1. NEXT_PUBLIC_API_URL esté configurado en Vercel');
+      console.error('   2. El API esté corriendo en Railway');
+      console.error('   3. Estés autenticado (token en localStorage)');
+      alert(`Error al cargar conversaciones: ${errorMessage}. Revisa la consola para más detalles.`);
     } finally {
       setLoading(false);
     }
@@ -71,6 +85,11 @@ export default function InboxPage() {
   async function loadFullConversation(id: string) {
     try {
       const data = await apiRequest<FullConversation>(`/conversations/${id}`);
+      console.log('💬 Conversación cargada:', {
+        id: data.id,
+        messagesCount: data.messages.length,
+        customer: data.customer.name
+      });
       setSelectedConversation(data);
       
       // Check for suggested reply in last message
@@ -81,7 +100,9 @@ export default function InboxPage() {
         setReplyText('');
       }
     } catch (error) {
-      console.error('Error loading conversation:', error);
+      console.error('❌ Error loading conversation:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Error al cargar conversación: ${errorMessage}`);
     }
   }
 
@@ -322,7 +343,8 @@ export default function InboxPage() {
                       </div>
                     </div>
                   );
-                })}
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -333,7 +355,12 @@ export default function InboxPage() {
               <>
                 {/* Mensajes */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                  {selectedConversation.messages.map((message) => (
+                  {selectedConversation.messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                      No hay mensajes en esta conversación
+                    </div>
+                  ) : (
+                    selectedConversation.messages.map((message) => (
                     <div
                       key={message.id}
                       className={`flex ${message.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
