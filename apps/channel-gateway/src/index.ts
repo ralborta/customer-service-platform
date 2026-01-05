@@ -807,6 +807,7 @@ const start = async () => {
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });
     fastify.log.info(`🚀 Channel Gateway listening on ${host}:${port}`);
+    console.log(`🚀 Channel Gateway listening on ${host}:${port}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
