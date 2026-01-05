@@ -745,102 +745,103 @@ async function start() {
         logger.info(`📁 Directorio raíz: ${rootDir}`);
         logger.info(`📁 Directorio DB: ${dbDir}`);
         logger.info(`🔗 DATABASE_URL configurado: SÍ (${process.env.DATABASE_URL.substring(0, 20)}...)`);
-      
-      // Verificar que el directorio de Prisma existe
-      const schemaPath = path.join(dbDir, 'prisma/schema.prisma');
-      if (!fs.existsSync(schemaPath)) {
-        throw new Error(`No se encontró schema.prisma en ${schemaPath}`);
-      }
-      logger.info(`✅ Schema encontrado: ${schemaPath}`);
-      
-      // Ejecutar prisma generate primero
-      logger.info('📦 Paso 1: Generando Prisma Client...');
-      execSync('npx prisma generate', { 
-        stdio: 'inherit',
-        cwd: dbDir,
-        env: { ...process.env }
-      });
-      logger.info('✅ Prisma Client generado');
-      
-      // Ejecutar db push
-      logger.info('📦 Paso 2: Creando/actualizando tablas (db push)...');
-      logger.info('📦 Ejecutando: npx prisma db push --accept-data-loss');
-      execSync('npx prisma db push --accept-data-loss', { 
-        stdio: 'inherit',
-        cwd: dbDir,
-        env: { ...process.env }
-      });
-      logger.info('✅ db:push completado');
-      
-      // Verificar que las tablas se crearon
-      logger.info('🔍 Verificando que las tablas existen...');
-      try {
-        const tableCheck = await prisma.$queryRaw`
-          SELECT table_name 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name IN ('tenants', 'users', 'conversations', 'messages')
-        `;
-        logger.info(`✅ Tablas encontradas: ${(tableCheck as any[]).length}`);
-        (tableCheck as any[]).forEach((t: any) => {
-          logger.info(`   - ${t.table_name}`);
-        });
-      } catch (err) {
-        logger.warn('⚠️ No se pudo verificar tablas, pero continuando...');
-      }
-      
-      // Verificar si hay datos antes de seed
-      logger.info('🔍 Verificando si hay tenants en la DB...');
-      let tenantCount = 0;
-      try {
-        tenantCount = await prisma.tenant.count();
-        logger.info(`📊 Tenants encontrados: ${tenantCount}`);
-      } catch (err) {
-        logger.error('❌ Error al contar tenants (tabla puede no existir):', err);
-        throw err;
-      }
-      
-      if (tenantCount === 0) {
-        logger.info('🌱 No hay tenants, ejecutando seed...');
-        logger.info('📦 Ejecutando: npx tsx prisma/seed.ts');
         
-        execSync('npx tsx prisma/seed.ts', { 
+        // Verificar que el directorio de Prisma existe
+        const schemaPath = path.join(dbDir, 'prisma/schema.prisma');
+        if (!fs.existsSync(schemaPath)) {
+          throw new Error(`No se encontró schema.prisma en ${schemaPath}`);
+        }
+        logger.info(`✅ Schema encontrado: ${schemaPath}`);
+        
+        // Ejecutar prisma generate primero
+        logger.info('📦 Paso 1: Generando Prisma Client...');
+        execSync('npx prisma generate', { 
           stdio: 'inherit',
           cwd: dbDir,
           env: { ...process.env }
         });
+        logger.info('✅ Prisma Client generado');
         
-        logger.info('✅ Seed completado');
+        // Ejecutar db push
+        logger.info('📦 Paso 2: Creando/actualizando tablas (db push)...');
+        logger.info('📦 Ejecutando: npx prisma db push --accept-data-loss');
+        execSync('npx prisma db push --accept-data-loss', { 
+          stdio: 'inherit',
+          cwd: dbDir,
+          env: { ...process.env }
+        });
+        logger.info('✅ db:push completado');
         
-        // Verificar nuevamente
-        const newTenantCount = await prisma.tenant.count();
-        logger.info(`📊 Tenants después del seed: ${newTenantCount}`);
-        
-        if (newTenantCount === 0) {
-          throw new Error('El seed se ejecutó pero no creó tenants. Revisa el seed.');
+        // Verificar que las tablas se crearon
+        logger.info('🔍 Verificando que las tablas existen...');
+        try {
+          const tableCheck = await prisma.$queryRaw`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name IN ('tenants', 'users', 'conversations', 'messages')
+          `;
+          logger.info(`✅ Tablas encontradas: ${(tableCheck as any[]).length}`);
+          (tableCheck as any[]).forEach((t: any) => {
+            logger.info(`   - ${t.table_name}`);
+          });
+        } catch (err) {
+          logger.warn('⚠️ No se pudo verificar tablas, pero continuando...');
         }
-      } else {
-        logger.info('✅ Ya hay tenants en la DB, saltando seed');
+        
+        // Verificar si hay datos antes de seed
+        logger.info('🔍 Verificando si hay tenants en la DB...');
+        let tenantCount = 0;
+        try {
+          tenantCount = await prisma.tenant.count();
+          logger.info(`📊 Tenants encontrados: ${tenantCount}`);
+        } catch (err) {
+          logger.error('❌ Error al contar tenants (tabla puede no existir):', err);
+          throw err;
+        }
+        
+        if (tenantCount === 0) {
+          logger.info('🌱 No hay tenants, ejecutando seed...');
+          logger.info('📦 Ejecutando: npx tsx prisma/seed.ts');
+          
+          execSync('npx tsx prisma/seed.ts', { 
+            stdio: 'inherit',
+            cwd: dbDir,
+            env: { ...process.env }
+          });
+          
+          logger.info('✅ Seed completado');
+          
+          // Verificar nuevamente
+          const newTenantCount = await prisma.tenant.count();
+          logger.info(`📊 Tenants después del seed: ${newTenantCount}`);
+          
+          if (newTenantCount === 0) {
+            throw new Error('El seed se ejecutó pero no creó tenants. Revisa el seed.');
+          }
+        } else {
+          logger.info('✅ Ya hay tenants en la DB, saltando seed');
+        }
+        
+        logger.info('✅ ============================================');
+        logger.info('✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE');
+        logger.info('✅ ============================================');
+      } catch (error) {
+        logger.error('❌ ============================================');
+        logger.error('❌ ERROR INICIALIZANDO BASE DE DATOS');
+        logger.error('❌ ============================================');
+        logger.error('Error:', error instanceof Error ? error.message : String(error));
+        if (error instanceof Error && error.stack) {
+          logger.error('Stack:', error.stack);
+        }
+        logger.error('💡 Verifica que:');
+        logger.error('   1. DATABASE_URL esté configurado correctamente');
+        logger.error('   2. La base de datos PostgreSQL esté accesible');
+        logger.error('   3. El schema.prisma esté en packages/db/prisma/');
+        logger.error('❌ El servicio continuará, pero puede fallar al procesar webhooks');
+        logger.error('❌ ============================================');
+        // No lanzar el error, dejar que el servicio continúe
       }
-      
-      logger.info('✅ ============================================');
-      logger.info('✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE');
-      logger.info('✅ ============================================');
-    } catch (error) {
-      logger.error('❌ ============================================');
-      logger.error('❌ ERROR INICIALIZANDO BASE DE DATOS');
-      logger.error('❌ ============================================');
-      logger.error('Error:', error instanceof Error ? error.message : String(error));
-      if (error instanceof Error && error.stack) {
-        logger.error('Stack:', error.stack);
-      }
-      logger.error('💡 Verifica que:');
-      logger.error('   1. DATABASE_URL esté configurado correctamente');
-      logger.error('   2. La base de datos PostgreSQL esté accesible');
-      logger.error('   3. El schema.prisma esté en packages/db/prisma/');
-      logger.error('❌ El servicio continuará, pero puede fallar al procesar webhooks');
-      logger.error('❌ ============================================');
-      // No lanzar el error, dejar que el servicio continúe
     }
   } else {
     logger.info('ℹ️ DB_INIT no está configurado, saltando inicialización');
