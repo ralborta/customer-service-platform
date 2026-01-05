@@ -361,7 +361,27 @@ async function buildApp() {
   });
 
   // Protected routes (all other routes require auth)
-  fastify.addHook('onRequest', authenticate);
+  // Excluir rutas públicas del hook de autenticación
+  fastify.addHook('onRequest', async (request, reply) => {
+    // Rutas públicas que NO requieren autenticación
+    const publicRoutes = [
+      '/auth/login',
+      '/health',
+      '/debug/users',
+      '/debug/login-status',
+      '/debug/fix-password',
+      '/debug/test-password',
+      '/ai/triage' // Tiene su propia autenticación interna
+    ];
+    
+    // Si la ruta es pública, no aplicar autenticación
+    if (publicRoutes.some(route => request.url.startsWith(route))) {
+      return;
+    }
+    
+    // Para todas las demás rutas, aplicar autenticación
+    return authenticate(request, reply);
+  });
 
   // Conversations
   fastify.get('/conversations', async (request, reply) => {
