@@ -172,33 +172,72 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
         }
       });
 
-      // Call internal API for triage (or do it here)
+      // Get tenant settings
       const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
       const settings = (tenant?.settings as Record<string, unknown>) || {};
       const aiMode = (settings.aiMode as string) || 'ASSISTED';
       const autopilotCategories = (settings.autopilotCategories as string[]) || [];
 
-      // Simple triage (rule-based for MVP)
-      const messageText = (message.text || '').toLowerCase();
-      let intent = 'otro';
-      let confidence = 0.5;
-      let category = 'OTRO';
+      // Call internal API for triage (better than rule-based here)
+      let triageResult: {
+        intent: string;
+        confidence: number;
+        suggestedReply: string;
+        autopilotEligible: boolean;
+        suggestedActions: Array<{ type: string; payload: Record<string, unknown> }>;
+      } | null = null;
 
-      if (messageText.includes('seguimiento') || messageText.includes('tracking') || messageText.includes('pedido')) {
-        intent = 'tracking';
-        confidence = 0.8;
-        category = 'TRACKING';
-      } else if (messageText.includes('factura') || messageText.includes('deuda') || messageText.includes('pago')) {
-        intent = 'facturacion';
-        confidence = 0.8;
-        category = 'FACTURACION';
-      } else if (messageText.includes('reclamo') || messageText.includes('problema') || messageText.includes('dañado')) {
-        intent = 'reclamo';
-        confidence = 0.9;
-        category = 'RECLAMO';
+      try {
+        const apiUrl = process.env.INTERNAL_API_URL || 'http://localhost:3000';
+        const triageResponse = await fetch(`${apiUrl}/ai/triage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // In production, use internal service token
+            'Authorization': `Bearer ${process.env.INTERNAL_API_TOKEN || 'internal-token'}`
+          },
+          body: JSON.stringify({
+            conversationId: conversation.id,
+            lastMessageId: dbMessage.id,
+            channel: 'whatsapp'
+          })
+        });
+
+        if (triageResponse.ok) {
+          triageResult = await triageResponse.json() as typeof triageResult;
+        }
+      } catch (error) {
+        logger.warn(error, 'Failed to call triage API, using fallback');
       }
 
-      const autopilotEligible = autopilotCategories.includes(category) && confidence >= 0.7;
+      // Fallback to simple rule-based if triage API fails
+      if (!triageResult) {
+        const messageText = (message.text || '').toLowerCase();
+        let intent = 'otro';
+        let confidence = 0.5;
+
+        if (messageText.includes('seguimiento') || messageText.includes('tracking') || messageText.includes('pedido')) {
+          intent = 'tracking';
+          confidence = 0.8;
+        } else if (messageText.includes('factura') || messageText.includes('deuda') || messageText.includes('pago')) {
+          intent = 'facturacion';
+          confidence = 0.8;
+        } else if (messageText.includes('reclamo') || messageText.includes('problema') || messageText.includes('dañado')) {
+          intent = 'reclamo';
+          confidence = 0.9;
+        }
+
+        triageResult = {
+          intent,
+          confidence,
+          suggestedReply: 'Gracias por contactarnos. Estamos procesando tu consulta.',
+          autopilotEligible: false,
+          suggestedActions: []
+        };
+      }
+
+      const category = triageResult.intent.toUpperCase();
+      const autopilotEligible = triageResult.autopilotEligible && autopilotCategories.includes(category);
 
       // Create or update ticket
       let ticket = await prisma.ticket.findFirst({
@@ -219,23 +258,39 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
         });
       }
 
-      // Update message with metadata
+      // Update message with metadata from triage
       await prisma.message.update({
         where: { id: dbMessage.id },
         data: {
           metadata: {
-            intent,
-            confidence,
-            suggestedReply: autopilotEligible ? `Gracias por contactarnos. Estamos procesando tu consulta sobre ${intent}.` : undefined,
-            suggestedActions: []
+            intent: triageResult.intent,
+            confidence: triageResult.confidence,
+            suggestedReply: triageResult.suggestedReply,
+            suggestedActions: triageResult.suggestedActions,
+            autopilotEligible
           }
         }
       });
 
+      // Update conversation priority based on intent
+      let conversationPriority = 'MEDIUM';
+      if (category === 'RECLAMO' || triageResult.confidence > 0.9) {
+        conversationPriority = 'HIGH';
+      } else if (category === 'TRACKING' || category === 'INFO') {
+        conversationPriority = 'LOW';
+      }
+
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          priority: conversationPriority,
+          updatedAt: new Date()
+        }
+      });
+
       // Autopilot: Send response if eligible
-      if (aiMode === 'AUTOPILOT' && autopilotEligible) {
-        const suggestedReply = `Gracias por contactarnos. Estamos procesando tu consulta sobre ${intent}. Te responderemos pronto.`;
-        const result = await builderbotAdapter.sendText(fromPhone, suggestedReply);
+      if (aiMode === 'AUTOPILOT' && autopilotEligible && triageResult.suggestedReply) {
+        const result = await builderbotAdapter.sendText(fromPhone, triageResult.suggestedReply);
         
         if (result.success) {
           await prisma.message.create({
@@ -243,9 +298,20 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
               conversationId: conversation.id,
               channel: 'WHATSAPP',
               direction: 'OUTBOUND',
-              text: suggestedReply,
-              metadata: { autopilot: true, messageId: result.messageId }
+              text: triageResult.suggestedReply,
+              metadata: { 
+                autopilot: true, 
+                messageId: result.messageId,
+                intent: triageResult.intent,
+                confidence: triageResult.confidence
+              }
             }
+          });
+
+          // Update conversation status if autopilot responded
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: { status: 'PENDING' } // Waiting for customer response
           });
         }
       }
