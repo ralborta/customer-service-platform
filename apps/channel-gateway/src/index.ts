@@ -1,5 +1,5 @@
 // CHECK #1: Confirmar que este código se está ejecutando
-console.log("BOOT_CHANNEL_GATEWAY ✅");
+console.log("🔥🔥🔥 BOOT_CHANNEL_GATEWAY__ONLY__2026-01-05 🔥🔥🔥");
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -705,7 +705,7 @@ fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
 
 // PASO 2: Ruta ping ultra simple para probar
 fastify.get('/__ping', async () => {
-  return { ok: true, ts: Date.now() };
+  return { ok: true, service: 'channel-gateway', ts: Date.now() };
 });
 
 // Health check - debe ser público (sin autenticación)
