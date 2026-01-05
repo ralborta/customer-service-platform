@@ -447,20 +447,56 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
         data: { status: 'processed', processedAt: new Date() }
       });
 
-      return reply.code(200).send({ status: 'processed', conversationId: conversation.id, ticketId: ticket.id });
-    } catch (error) {
-      await prisma.eventLog.update({
-        where: { id: eventLog.id },
-        data: {
-          status: 'failed',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        }
+      const responseTime = Date.now() - startTime;
+      logger.info({ 
+        conversationId: conversation.id, 
+        ticketId: ticket.id,
+        messageId: dbMessage.id,
+        responseTime: `${responseTime}ms`
+      }, '✅ Message processed successfully');
+      
+      return reply.code(200).send({ 
+        status: 'processed', 
+        conversationId: conversation.id, 
+        ticketId: ticket.id,
+        messageId: dbMessage.id
       });
-      throw error;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const bodyStr = typeof body === 'string' ? body : JSON.stringify(body || {}).substring(0, 200);
+      logger.error({ 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+        tenantId,
+        bodyPreview: bodyStr
+      }, '❌ Error processing message');
+      
+      if (eventLog) {
+        await prisma.eventLog.update({
+          where: { id: eventLog.id },
+          data: {
+            status: 'failed',
+            error: errorMessage
+          }
+        });
+      }
+      
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: errorMessage
+      });
     }
   } catch (error) {
-    logger.error(error, 'Error processing WhatsApp webhook');
-    return reply.code(400).send({ error: 'Invalid payload' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error({ 
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+      tenantId
+    }, '❌ Error processing WhatsApp webhook');
+    return reply.code(500).send({ 
+      error: 'Internal server error',
+      details: errorMessage
+    });
   }
 });
 
