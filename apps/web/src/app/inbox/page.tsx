@@ -304,45 +304,53 @@ export default function InboxPage() {
             <div className="flex-1 overflow-y-auto">
               <div className="p-2">
                 <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Tickets</div>
-                {filteredConversations.map((conv) => {
-                  const badge = getBadgeInfo(conv);
-                  return (
-                    <div
-                      key={conv.id}
-                      onClick={() => loadFullConversation(conv.id)}
-                      className={`p-2.5 rounded-lg cursor-pointer mb-1 transition-all ${
-                        selectedConversation?.id === conv.id 
-                          ? 'bg-blue-50 border border-blue-200 shadow-sm' 
-                          : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2.5">
-                        {/* Avatar circular */}
-                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 shadow-sm">
-                          {getInitials(conv.customer.name)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <div className="font-medium text-sm text-gray-900 truncate">{conv.customer.name}</div>
-                            <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${badge.color} flex-shrink-0 ml-1`}>
-                              {badge.text}
-                            </span>
+                {loading ? (
+                  <div className="text-center py-8 text-gray-400 text-sm">Cargando conversaciones...</div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    <p className="mb-2">No hay conversaciones</p>
+                    <p className="text-xs text-gray-500">Los mensajes inbound aparecerán aquí</p>
+                  </div>
+                ) : (
+                  filteredConversations.map((conv) => {
+                    const badge = getBadgeInfo(conv);
+                    return (
+                      <div
+                        key={conv.id}
+                        onClick={() => loadFullConversation(conv.id)}
+                        className={`p-2.5 rounded-lg cursor-pointer mb-1 transition-all ${
+                          selectedConversation?.id === conv.id 
+                            ? 'bg-blue-50 border border-blue-200 shadow-sm' 
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          {/* Avatar circular */}
+                          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0 shadow-sm">
+                            {getInitials(conv.customer.name)}
                           </div>
-                          <div className="text-[11px] text-gray-500 truncate mb-0.5">
-                            {conv.customer.phoneNumber}
-                          </div>
-                          {conv.messages[0] && (
-                            <div className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">
-                              {conv.messages[0].text || '(Sin texto)'}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <div className="font-medium text-sm text-gray-900 truncate">{conv.customer.name}</div>
+                              <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${badge.color} flex-shrink-0 ml-1`}>
+                                {badge.text}
+                              </span>
                             </div>
-                          )}
-                          <div className="text-[10px] text-gray-400 mt-1">
-                            {getTimeAgo(conv.updatedAt)}
+                            <div className="text-[11px] text-gray-500 truncate mb-0.5">
+                              {conv.customer.phoneNumber}
+                            </div>
+                            {conv.messages[0] && (
+                              <div className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">
+                                {conv.messages[0].text || '(Sin texto)'}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-gray-400 mt-1">
+                              {getTimeAgo(conv.updatedAt)}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
+                    );
                   })
                 )}
               </div>
