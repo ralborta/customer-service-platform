@@ -9,12 +9,13 @@ import {
   Ticket,
   BookOpen,
   Package,
-  Receipt,
   FileText,
   BarChart3,
   Bell,
   Activity,
-  Settings
+  Settings,
+  ChevronDown,
+  User
 } from 'lucide-react';
 
 const menuItems = [
@@ -33,14 +34,25 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="w-20 bg-slate-900 h-screen fixed left-0 top-0 flex flex-col items-center py-4">
-      {/* Logo/Icon at top */}
-      <div className="mb-8">
-        <LayoutDashboard className="w-6 h-6 text-white" />
+    <div className="w-64 bg-slate-900 h-screen fixed left-0 top-0 flex flex-col">
+      {/* Header con Inbox y Customer */}
+      <div className="p-4 border-b border-slate-700">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 text-white">
+            <LayoutDashboard className="w-5 h-5" />
+            <span className="text-sm font-medium">Inbox</span>
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          </div>
+          <div className="flex items-center gap-2 text-white">
+            <User className="w-5 h-5" />
+            <span className="text-sm font-medium">Customer</span>
+            <ChevronDown className="w-4 h-4 text-slate-400" />
+          </div>
+        </div>
       </div>
       
       {/* Navigation items */}
-      <nav className="flex-1 space-y-2 w-full px-2">
+      <nav className="flex-1 overflow-y-auto py-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
@@ -49,23 +61,22 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center gap-1 px-2 py-3 rounded-lg transition-colors group relative',
+                'flex items-center gap-3 px-4 py-3 mx-2 rounded-lg transition-colors',
                 isActive
                   ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               )}
-              title={item.label}
             >
               <Icon className="w-5 h-5" />
-              <span className="text-xs">{item.label}</span>
+              <span className="text-sm font-medium">{item.label}</span>
             </Link>
           );
         })}
       </nav>
       
       {/* User profile at bottom */}
-      <div className="mt-auto">
-        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+      <div className="p-4 border-t border-slate-700">
+        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold mx-auto">
           IM
         </div>
       </div>

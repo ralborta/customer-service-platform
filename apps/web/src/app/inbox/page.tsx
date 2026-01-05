@@ -187,19 +187,8 @@ export default function InboxPage() {
       <div className="flex h-screen bg-gray-50">
         {/* Columna Izquierda: Lista de Conversaciones */}
         <div className="w-80 bg-white border-r flex flex-col">
-          {/* Header */}
+          {/* Search Bar */}
           <div className="p-4 border-b bg-white">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-1">
-                <h2 className="text-base font-semibold text-gray-900">Inbox</h2>
-                <ChevronDown className="w-4 h-4 text-gray-500" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <User className="w-4 h-4 text-gray-500" />
-                <span className="text-xs text-gray-600">Customer</span>
-                <ChevronDown className="w-3 h-3 text-gray-400" />
-              </div>
-            </div>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
