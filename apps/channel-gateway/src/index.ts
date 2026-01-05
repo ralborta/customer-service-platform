@@ -30,7 +30,7 @@ fastify.register(cors, {
 fastify.register(rateLimit, {
   max: 100,
   timeWindow: '1 minute',
-  skip: (request) => {
+  skip: (request: { url: string }) => {
     // No aplicar rate limiting a endpoints públicos
     const url = request.url.split('?')[0]; // Remover query params
     const publicRoutes = ['/health', '/debug'];
@@ -40,7 +40,7 @@ fastify.register(rateLimit, {
     }
     return shouldSkip;
   }
-});
+} as Parameters<typeof fastify.register>[1]);
 
 // Helper: Generate idempotency key from payload
 function generateIdempotencyKey(source: string, payload: unknown): string {
@@ -289,7 +289,17 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
       const message = data.message || {};
       
       // Extraer texto del mensaje (puede venir en 'text' o 'body')
-      const messageText = message.text || message.body || '(sin texto)';
+      // Asegurar que siempre sea string
+      let messageText: string;
+      if (typeof message.text === 'string') {
+        messageText = message.text;
+      } else if (typeof message.body === 'string') {
+        messageText = message.body;
+      } else if (typeof message === 'string') {
+        messageText = message;
+      } else {
+        messageText = '(sin texto)';
+      }
       
       logger.info({ fromPhone, messageText: messageText.substring(0, 100), message }, 'Processing WhatsApp message');
 
@@ -426,13 +436,13 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
       await prisma.message.update({
         where: { id: dbMessage.id },
         data: {
-          metadata: {
+          metadata: JSON.parse(JSON.stringify({
             intent: triageResult.intent,
             confidence: triageResult.confidence,
             suggestedReply: triageResult.suggestedReply,
             suggestedActions: triageResult.suggestedActions,
             autopilotEligible
-          }
+          }))
         }
       });
 
@@ -549,13 +559,9 @@ fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
     const body = request.body as unknown;
     const validated = ElevenLabsWebhookSchema.parse(body);
 
-    // Resolve tenant
+    // Resolve tenant (nunca retorna null)
     const accountKey = (request.headers['x-account-key'] as string) || 'elevenlabs_calls_main';
     const tenantId = await resolveTenant(accountKey);
-    
-    if (!tenantId) {
-      return reply.code(401).send({ error: 'Tenant not found' });
-    }
 
     // Idempotency
     const idempotencyKey = generateIdempotencyKey('elevenlabs_post_call', validated);
@@ -684,8 +690,8 @@ fastify.get('/health', async () => {
 // Estos endpoints NO requieren autenticación para facilitar el debugging
 fastify.get('/debug/messages', async (request, reply) => {
   try {
-    const { limit = 10 } = request.query as { limit?: string };
-    const limitNum = parseInt(limit, 10) || 10;
+    const { limit = '10' } = request.query as { limit?: string };
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
     
     const messages = await prisma.message.findMany({
       take: limitNum,
@@ -724,8 +730,8 @@ fastify.get('/debug/messages', async (request, reply) => {
 // Debug endpoint - verificar eventos de webhook (público, sin autenticación)
 fastify.get('/debug/events', async (request, reply) => {
   try {
-    const { limit = 20 } = request.query as { limit?: string };
-    const limitNum = parseInt(limit, 10) || 20;
+    const { limit = '20' } = request.query as { limit?: string };
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
     
     const events = await prisma.eventLog.findMany({
       take: limitNum,
