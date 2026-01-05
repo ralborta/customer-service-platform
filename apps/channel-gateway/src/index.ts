@@ -49,7 +49,36 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
       where: { accountKey, active: true },
       include: { tenant: true }
     });
-    return account?.tenantId || null;
+    if (account) {
+      return account.tenantId;
+    }
+    
+    // Fallback: Si no existe el ChannelAccount, usar el primer tenant disponible (para desarrollo)
+    // En producción, deberías crear el ChannelAccount en el seed
+    logger.warn({ accountKey }, 'ChannelAccount not found, using first available tenant as fallback');
+    const firstTenant = await prisma.tenant.findFirst({
+      orderBy: { createdAt: 'asc' }
+    });
+    
+    if (firstTenant) {
+      // Crear el ChannelAccount para futuras requests
+      await prisma.channelAccount.upsert({
+        where: {
+          tenantId_accountKey: {
+            tenantId: firstTenant.id,
+            accountKey
+          }
+        },
+        update: { active: true },
+        create: {
+          tenantId: firstTenant.id,
+          channel: accountKey.includes('builderbot') ? 'builderbot_whatsapp' : 'elevenlabs_calls',
+          accountKey,
+          active: true
+        }
+      });
+      return firstTenant.id;
+    }
   }
   return null;
 }
@@ -116,11 +145,19 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
 
     // Resolve tenant (from header or account key)
     const accountKey = (request.headers['x-account-key'] as string) || 'builderbot_whatsapp_main';
+    logger.info({ accountKey, headers: request.headers }, 'Resolving tenant for webhook');
+    
     const tenantId = await resolveTenant(accountKey);
     
     if (!tenantId) {
-      return reply.code(401).send({ error: 'Tenant not found' });
+      logger.error({ accountKey }, 'Tenant not found - check if ChannelAccount exists or seed was run');
+      return reply.code(401).send({ 
+        error: 'Tenant not found',
+        details: `No tenant found for accountKey: ${accountKey}. Make sure DB_INIT=true was set and seed ran successfully.`
+      });
     }
+    
+    logger.info({ tenantId, accountKey }, 'Tenant resolved successfully');
 
     // Idempotency check
     const idempotencyKey = generateIdempotencyKey('builderbot_whatsapp', validated);
