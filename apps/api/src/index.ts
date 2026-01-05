@@ -104,37 +104,78 @@ async function buildApp() {
     return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role, tenantId: user.tenantId } };
   });
 
-  // Protected routes
-  fastify.addHook('onRequest', authenticate);
-
-  // AI Triage
+  // AI Triage - INTERNAL ENDPOINT (no auth required, uses internal token)
   fastify.post('/ai/triage', async (request, reply) => {
-    const user = request.user as AuthUser;
-    const body = request.body as unknown;
-    const validated = TriageRequestSchema.parse(body);
+    // Check for internal API token (from Channel Gateway)
+    const authHeader = request.headers.authorization;
+    const internalToken = process.env.INTERNAL_API_TOKEN || 'internal-token';
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      if (token === internalToken) {
+        // Internal call from Channel Gateway - no user auth needed
+        const body = request.body as unknown;
+        const validated = TriageRequestSchema.parse(body);
 
-    try {
-      // Verify conversation belongs to tenant
-      const conversation = await prisma.conversation.findUnique({
-        where: { id: validated.conversationId }
-      });
+        try {
+          // Verify conversation exists
+          const conversation = await prisma.conversation.findUnique({
+            where: { id: validated.conversationId }
+          });
 
-      if (!conversation || conversation.tenantId !== user.tenantId) {
-        return reply.code(404).send({ error: 'Conversation not found' });
+          if (!conversation) {
+            return reply.code(404).send({ error: 'Conversation not found' });
+          }
+
+          const result = await performTriage(
+            validated.conversationId,
+            validated.lastMessageId,
+            validated.channel
+          );
+
+          return result;
+        } catch (error) {
+          logger.error(error, 'Triage error');
+          return reply.code(500).send({ error: 'Triage failed' });
+        }
       }
+    }
+    
+    // If no valid internal token, require user authentication
+    try {
+      await request.jwtVerify();
+      const user = request.user as AuthUser;
+      const body = request.body as unknown;
+      const validated = TriageRequestSchema.parse(body);
 
-      const result = await performTriage(
-        validated.conversationId,
-        validated.lastMessageId,
-        validated.channel
-      );
+      try {
+        // Verify conversation belongs to tenant
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: validated.conversationId }
+        });
 
-      return result;
-    } catch (error) {
-      logger.error(error, 'Triage error');
-      return reply.code(500).send({ error: 'Triage failed' });
+        if (!conversation || conversation.tenantId !== user.tenantId) {
+          return reply.code(404).send({ error: 'Conversation not found' });
+        }
+
+        const result = await performTriage(
+          validated.conversationId,
+          validated.lastMessageId,
+          validated.channel
+        );
+
+        return result;
+      } catch (error) {
+        logger.error(error, 'Triage error');
+        return reply.code(500).send({ error: 'Triage failed' });
+      }
+    } catch (err) {
+      return reply.code(401).send({ error: 'Unauthorized' });
     }
   });
+
+  // Protected routes (all other routes require auth)
+  fastify.addHook('onRequest', authenticate);
 
   // Conversations
   fastify.get('/conversations', async (request, reply) => {

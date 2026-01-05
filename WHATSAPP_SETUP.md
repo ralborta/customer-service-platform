@@ -34,13 +34,16 @@ BUILDERBOT_BOT_ID=tu_bot_id_opcional
 3. Ve a **Configuración** → **Webhooks** (o **Integrations**)
 4. Agrega webhook:
    - **URL**: `https://tu-channel-gateway.railway.app/webhooks/builderbot/whatsapp`
-     - (Reemplaza con la URL pública de tu Channel Gateway en Railway)
+     - ⚠️ **IMPORTANTE**: Debe ser la URL del **Channel Gateway**, NO del API
+     - Ejemplo: `https://customer-servicechannel-gateway-production.up.railway.app/webhooks/builderbot/whatsapp`
    - **Método**: `POST`
    - **Headers** (si Builderbot lo permite):
      ```
      X-Account-Key: builderbot_whatsapp_main
      ```
    - **Eventos**: Selecciona `message.received`
+
+**⚠️ VERIFICACIÓN**: Asegúrate de que la URL del webhook termine en `/webhooks/builderbot/whatsapp` y que sea del servicio **Channel Gateway**, no del API.
 
 **Nuestro endpoint espera recibir:**
 ```
