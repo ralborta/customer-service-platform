@@ -25,10 +25,15 @@ fastify.register(cors, {
   origin: true
 });
 
-// Rate limiting
+// Rate limiting - excluir endpoints de debug y health
 fastify.register(rateLimit, {
   max: 100,
-  timeWindow: '1 minute'
+  timeWindow: '1 minute',
+  skip: (request) => {
+    // No aplicar rate limiting a endpoints públicos
+    const publicRoutes = ['/health', '/debug'];
+    return publicRoutes.some(route => request.url.startsWith(route));
+  }
 });
 
 // Helper: Generate idempotency key from payload
