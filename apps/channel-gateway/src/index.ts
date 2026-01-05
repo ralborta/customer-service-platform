@@ -1,3 +1,6 @@
+// CHECK #1: Confirmar que este código se está ejecutando
+console.log("BOOT_CHANNEL_GATEWAY__v2026-01-05__A");
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -25,12 +28,25 @@ fastify.register(cors, {
   origin: true
 });
 
-// Hook ANTES de todo para debug
+// CHECK #2: Hook onRequest usando fastify.log (no logger externo)
 fastify.addHook('onRequest', async (request, reply) => {
   if (request.url.startsWith('/webhooks/builderbot/whatsapp')) {
-    logger.info('🔵🔵🔵 ONREQUEST HOOK EJECUTADO 🔵🔵🔵');
-    logger.info({ url: request.url, method: request.method }, 'Request intercepted by onRequest hook');
+    fastify.log.info('🔵🔵🔵 ONREQUEST HOOK EJECUTADO 🔵🔵🔵');
+    fastify.log.info({ url: request.url, method: request.method }, 'Request intercepted by onRequest hook');
   }
+});
+
+// CHECK #5: Hook onSend para capturar cualquier 401
+fastify.addHook('onSend', async (request, reply, payload) => {
+  if (reply.statusCode === 401) {
+    fastify.log.warn({
+      url: request.url,
+      method: request.method,
+      headers: request.headers,
+      replyHeaders: reply.getHeaders()
+    }, '⚠️⚠️⚠️ 401 EMITIDO - capturado en onSend ⚠️⚠️⚠️');
+  }
+  return payload;
 });
 
 // Rate limiting TEMPORALMENTE DESHABILITADO para debug
@@ -189,9 +205,9 @@ async function getOrCreateConversation(
 
 // POST /webhooks/builderbot/whatsapp
 fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
-  // LOG INMEDIATO - esto debe aparecer SIEMPRE si el handler se ejecuta
-  logger.info('🚨🚨🚨 HANDLER EJECUTADO 🚨🚨🚨');
-  logger.info({ url: request.url, method: request.method }, 'Handler started');
+  // CHECK #2: LOG usando fastify.log (no logger externo)
+  fastify.log.info('🚨🚨🚨 HANDLER EJECUTADO 🚨🚨🚨');
+  fastify.log.info({ url: request.url, method: request.method }, 'Handler started');
   
   const startTime = Date.now();
   let tenantId: string | null = null;
@@ -765,12 +781,20 @@ fastify.get('/debug/events', async (request, reply) => {
 
 const start = async () => {
   try {
+    // CHECK #3: Verificar que las rutas están registradas
+    await fastify.ready();
+    fastify.log.info('\n' + '='.repeat(60));
+    fastify.log.info('📋 RUTAS REGISTRADAS:');
+    fastify.log.info('='.repeat(60));
+    fastify.log.info(fastify.printRoutes());
+    fastify.log.info('='.repeat(60) + '\n');
+    
     // Plugins ya están registrados arriba (CORS y rate limiting)
     // Solo necesitamos iniciar el servidor
     const port = parseInt(process.env.PORT || '3001', 10);
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });
-    logger.info(`🚀 Channel Gateway listening on ${host}:${port}`);
+    fastify.log.info(`🚀 Channel Gateway listening on ${host}:${port}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
