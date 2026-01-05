@@ -25,15 +25,15 @@ fastify.register(cors, {
   origin: true
 });
 
-// Rate limiting - excluir endpoints de debug y health
-// IMPORTANTE: Los endpoints de debug y health NO deben tener rate limiting
+// Rate limiting - excluir endpoints de debug, health y webhooks
+// IMPORTANTE: Los webhooks NO deben tener rate limiting porque vienen de servicios externos
 fastify.register(rateLimit, {
   max: 100,
   timeWindow: '1 minute',
   skip: (request: { url: string }) => {
-    // No aplicar rate limiting a endpoints públicos
+    // No aplicar rate limiting a endpoints públicos y webhooks
     const url = request.url.split('?')[0]; // Remover query params
-    const publicRoutes = ['/health', '/debug'];
+    const publicRoutes = ['/health', '/debug', '/webhooks'];
     const shouldSkip = publicRoutes.some(route => url.startsWith(route));
     if (shouldSkip) {
       logger.debug({ url }, 'Skipping rate limit for public route');
@@ -191,6 +191,10 @@ async function getOrCreateConversation(
 
 // POST /webhooks/builderbot/whatsapp
 fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
+  // LOG INMEDIATO - esto debe aparecer SIEMPRE si el handler se ejecuta
+  logger.info('🚨🚨🚨 HANDLER EJECUTADO 🚨🚨🚨');
+  logger.info({ url: request.url, method: request.method }, 'Handler started');
+  
   const startTime = Date.now();
   let tenantId: string | null = null;
   let eventLog: any = null;
