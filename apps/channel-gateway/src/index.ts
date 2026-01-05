@@ -293,28 +293,47 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
       logger.info({ fromPhone, messageText: messageText.substring(0, 100), message }, 'Processing WhatsApp message');
 
       // Get or create customer
+      logger.info({ tenantId, fromPhone }, '👤 Obteniendo/creando customer...');
       const customer = await getOrCreateCustomer(tenantId, fromPhone);
-      logger.info({ customerId: customer.id, phoneNumber: fromPhone }, 'Customer resolved');
+      logger.info({ customerId: customer.id, phoneNumber: fromPhone, customerName: customer.name }, '✅ Customer resolved');
 
       // Get or create conversation
+      logger.info({ tenantId, customerId: customer.id, channel: 'WHATSAPP' }, '💬 Obteniendo/creando conversación...');
       const conversation = await getOrCreateConversation(
         tenantId,
         customer.id,
         'WHATSAPP'
       );
-      logger.info({ conversationId: conversation.id }, 'Conversation resolved');
+      logger.info({ conversationId: conversation.id, status: conversation.status }, '✅ Conversation resolved');
 
       // Create message
-      const dbMessage = await prisma.message.create({
-        data: {
+      let dbMessage;
+      try {
+        logger.info({ conversationId: conversation.id, messageText: messageText.substring(0, 50) }, '📝 Creando mensaje en DB...');
+        dbMessage = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            channel: 'WHATSAPP',
+            direction: 'INBOUND',
+            text: messageText,
+            rawPayload: JSON.parse(JSON.stringify(validated))
+          }
+        });
+        logger.info({ 
+          messageId: dbMessage.id, 
           conversationId: conversation.id,
-          channel: 'WHATSAPP',
           direction: 'INBOUND',
-          text: messageText,
-          rawPayload: JSON.parse(JSON.stringify(validated))
-        }
-      });
-      logger.info({ messageId: dbMessage.id }, 'Message created in database');
+          textLength: messageText.length
+        }, '✅ Message created in database');
+      } catch (dbError) {
+        logger.error({ 
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          stack: dbError instanceof Error ? dbError.stack : undefined,
+          conversationId: conversation.id,
+          messageText: messageText.substring(0, 100)
+        }, '❌ ERROR al crear mensaje en DB');
+        throw dbError; // Re-lanzar para que se maneje en el catch externo
+      }
 
       // Get tenant settings
       const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
