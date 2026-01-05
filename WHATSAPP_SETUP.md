@@ -19,20 +19,45 @@ BUILDERBOT_BOT_ID=tu_bot_id_opcional
 
 ## Flujo de Funcionamiento
 
-### 1. Recepción de Mensajes (Webhook)
+### 1. Recepción de Mensajes (Webhook) ⭐ CONFIGURAR EN BUILDERBOT
 
-Cuando Builderbot recibe un mensaje, debe enviar un webhook a:
-```
-POST https://tu-gateway-url.com/webhooks/builderbot/whatsapp
-```
+**IMPORTANTE**: Este webhook se configura EN BUILDERBOT, no en nuestro sistema.
 
-**Headers requeridos:**
-- `X-Account-Key`: Identificador de la cuenta (opcional, default: `builderbot_whatsapp_main`)
+**Flujo:**
+1. Cliente envía mensaje por WhatsApp → Builderbot lo recibe
+2. Builderbot envía webhook a nuestro Channel Gateway
+3. Nuestro sistema procesa el mensaje
 
 **Configuración en Builderbot:**
-- Ve a la configuración de webhooks de tu bot
-- Agrega la URL de tu channel-gateway
-- Configura el header `X-Account-Key` si usas múltiples cuentas
+1. Ve a tu dashboard de Builderbot (https://builderbot.cloud)
+2. Selecciona tu bot
+3. Ve a **Configuración** → **Webhooks** (o **Integrations**)
+4. Agrega webhook:
+   - **URL**: `https://tu-channel-gateway.railway.app/webhooks/builderbot/whatsapp`
+     - (Reemplaza con la URL pública de tu Channel Gateway en Railway)
+   - **Método**: `POST`
+   - **Headers** (si Builderbot lo permite):
+     ```
+     X-Account-Key: builderbot_whatsapp_main
+     ```
+   - **Eventos**: Selecciona `message.received`
+
+**Nuestro endpoint espera recibir:**
+```
+POST https://tu-channel-gateway.railway.app/webhooks/builderbot/whatsapp
+Headers:
+  X-Account-Key: builderbot_whatsapp_main (opcional)
+Body:
+  {
+    "event": "message.received",
+    "data": {
+      "from": "+5491112345678",
+      "message": {
+        "text": "Hola, quiero consultar mi pedido"
+      }
+    }
+  }
+```
 
 ### 2. Envío de Mensajes
 

@@ -182,18 +182,62 @@ railway run pnpm db:seed
 
 ---
 
-## Configurar Webhook en Builderbot
+## Configurar Webhook en Builderbot (IMPORTANTE)
 
-1. Ve a tu dashboard de Builderbot
-2. Configuración del Bot → **Webhooks**
-3. Agrega webhook:
-   - **URL**: `https://tu-channel-gateway.railway.app/webhooks/builderbot/whatsapp`
-   - **Método**: `POST`
-   - **Headers**:
-     ```
-     X-Account-Key: builderbot_whatsapp_main
-     ```
-   - **Eventos**: Selecciona `message.received`
+**Este es el paso clave**: Configurar Builderbot para que ENVÍE mensajes a nuestro sistema.
+
+### Paso a paso:
+
+1. **Obtén la URL pública de tu Channel Gateway en Railway:**
+   - Ve al servicio Channel Gateway en Railway
+   - Settings → Networking → Generate Domain
+   - Copia la URL: `https://tu-channel-gateway.railway.app`
+
+2. **Ve al dashboard de Builderbot:**
+   - Login en https://builderbot.cloud
+   - Selecciona tu bot
+
+3. **Configura el Webhook:**
+   - Ve a **Configuración** → **Webhooks** (o **Integrations**)
+   - Click en **Add Webhook** o **Configure Webhook**
+   - Configura:
+     - **URL**: `https://tu-channel-gateway.railway.app/webhooks/builderbot/whatsapp`
+     - **Método**: `POST`
+     - **Headers** (si Builderbot lo permite):
+       ```
+       X-Account-Key: builderbot_whatsapp_main
+       ```
+     - **Eventos a escuchar**: 
+       - ✅ `message.received` (mensajes entrantes)
+       - ✅ `message.sent` (opcional, para confirmaciones)
+       - ✅ `message.delivered` (opcional)
+
+4. **Guarda y activa el webhook**
+
+5. **Prueba enviando un mensaje de prueba:**
+   - Envía un mensaje de WhatsApp a tu número de Builderbot
+   - Verifica en los logs de Railway Channel Gateway que llegó el webhook
+   - Verifica en la base de datos que se creó el mensaje
+
+### Estructura del Webhook que Builderbot debe enviar:
+
+Nuestro sistema espera recibir de Builderbot:
+
+```json
+{
+  "event": "message.received",
+  "data": {
+    "from": "+5491112345678",
+    "message": {
+      "text": "Hola, quiero consultar mi pedido"
+    },
+    "messageId": "msg_123456",
+    "timestamp": "2024-01-01T12:00:00Z"
+  }
+}
+```
+
+Si Builderbot usa un formato diferente, necesitarás ajustar el schema en `packages/shared/src/schemas/index.ts`
 
 ---
 
