@@ -675,6 +675,80 @@ fastify.get('/health', async () => {
   return { status: 'ok', service: 'channel-gateway' };
 });
 
+// Debug endpoint - verificar mensajes en DB
+fastify.get('/debug/messages', async (request, reply) => {
+  try {
+    const { limit = 10 } = request.query as { limit?: string };
+    const limitNum = parseInt(limit, 10) || 10;
+    
+    const messages = await prisma.message.findMany({
+      take: limitNum,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        conversation: {
+          include: {
+            customer: true
+          }
+        }
+      }
+    });
+    
+    const totalMessages = await prisma.message.count();
+    const totalConversations = await prisma.conversation.count();
+    const totalCustomers = await prisma.customer.count();
+    
+    return {
+      messages,
+      stats: {
+        totalMessages,
+        totalConversations,
+        totalCustomers,
+        recentMessages: messages.length
+      }
+    };
+  } catch (error) {
+    logger.error({ error }, 'Debug messages error');
+    return reply.code(500).send({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Debug endpoint - verificar eventos de webhook
+fastify.get('/debug/events', async (request, reply) => {
+  try {
+    const { limit = 20 } = request.query as { limit?: string };
+    const limitNum = parseInt(limit, 10) || 20;
+    
+    const events = await prisma.eventLog.findMany({
+      take: limitNum,
+      orderBy: { createdAt: 'desc' },
+      where: {
+        source: 'builderbot_whatsapp'
+      }
+    });
+    
+    const stats = {
+      total: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp' } }),
+      processed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'processed' } }),
+      pending: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'pending' } }),
+      failed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'failed' } })
+    };
+    
+    return {
+      events,
+      stats
+    };
+  } catch (error) {
+    logger.error({ error }, 'Debug events error');
+    return reply.code(500).send({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 const start = async () => {
   try {
     // Register plugins
