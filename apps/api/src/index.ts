@@ -713,156 +713,59 @@ async function start() {
   }
   isStarting = true;
 
-  // Inicializar DB si es necesario (solo primera vez)
-  if (process.env.DB_INIT === 'true') {
-    // Verificar DATABASE_URL ANTES de intentar inicializar
-    if (!process.env.DATABASE_URL || process.env.DATABASE_URL.trim() === '') {
+  // Verificar que la DB esté accesible y tenga tablas
+  // La inicialización (db push + seed) se hace en el startCommand de Railway
+  logger.info('🔍 Verificando conexión a la base de datos...');
+  try {
+    // Intentar una query simple para verificar conexión
+    await prisma.$queryRaw`SELECT 1 as test`;
+    logger.info('✅ Conexión a la DB exitosa');
+    
+    // Verificar que las tablas existen
+    const tableCheck = await prisma.$queryRaw`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      AND table_name IN ('tenants', 'users', 'conversations', 'messages')
+    `;
+    const tableCount = (tableCheck as any[]).length;
+    logger.info(`📊 Tablas encontradas: ${tableCount}`);
+    
+    if (tableCount === 0) {
       logger.error('❌ ============================================');
-      logger.error('❌ ERROR CRÍTICO: DATABASE_URL NO CONFIGURADO');
+      logger.error('❌ ERROR: NO HAY TABLAS EN LA BASE DE DATOS');
       logger.error('❌ ============================================');
-      logger.error('💡 Para solucionarlo:');
-      logger.error('   1. Ve a Railway → PostgreSQL Service → Variables');
-      logger.error('   2. Copia el valor de DATABASE_URL');
-      logger.error('   3. Ve a Railway → API Service → Variables');
-      logger.error('   4. Agrega: DATABASE_URL=<valor_copiado>');
-      logger.error('   5. Reinicia el servicio API');
+      logger.error('💡 La base de datos no está inicializada.');
+      logger.error('💡 El script init-db-railway.sh debería ejecutarse en el startCommand.');
+      logger.error('💡 Verifica los logs del startCommand en Railway.');
       logger.error('❌ ============================================');
-      logger.error('❌ No se puede inicializar la DB sin DATABASE_URL');
-      logger.error('❌ El servicio continuará pero fallará al procesar webhooks');
+      logger.error('❌ El servicio continuará, pero fallará al procesar requests');
       logger.error('❌ ============================================');
     } else {
+      // Verificar si hay datos
       try {
-        logger.info('🔄 ============================================');
-        logger.info('🔄 INICIANDO INICIALIZACIÓN DE BASE DE DATOS');
-        logger.info('🔄 ============================================');
-        
-        const { execSync } = require('child_process');
-        const path = require('path');
-        const fs = require('fs');
-        
-        // Obtener el directorio raíz del monorepo
-        const rootDir = path.resolve(__dirname, '../../..');
-        const dbDir = path.resolve(rootDir, 'packages/db');
-        
-        logger.info(`📁 Directorio raíz: ${rootDir}`);
-        logger.info(`📁 Directorio DB: ${dbDir}`);
-        logger.info(`🔗 DATABASE_URL configurado: SÍ (${process.env.DATABASE_URL.substring(0, 20)}...)`);
-        
-        // Verificar que el directorio de Prisma existe
-        const schemaPath = path.join(dbDir, 'prisma/schema.prisma');
-        if (!fs.existsSync(schemaPath)) {
-          throw new Error(`No se encontró schema.prisma en ${schemaPath}`);
-        }
-        logger.info(`✅ Schema encontrado: ${schemaPath}`);
-        
-        // Ejecutar prisma generate primero
-        logger.info('📦 Paso 1: Generando Prisma Client...');
-        execSync('npx prisma generate', { 
-          stdio: 'inherit',
-          cwd: dbDir,
-          env: { ...process.env }
-        });
-        logger.info('✅ Prisma Client generado');
-        
-        // Ejecutar db push
-        logger.info('📦 Paso 2: Creando/actualizando tablas (db push)...');
-        logger.info('📦 Ejecutando: npx prisma db push --accept-data-loss');
-        try {
-          execSync('npx prisma db push --accept-data-loss', { 
-            stdio: 'inherit',
-            cwd: dbDir,
-            env: { ...process.env },
-            timeout: 60000 // 60 segundos timeout
-          });
-          logger.info('✅ db:push completado');
-        } catch (dbPushError) {
-          logger.error('❌ Error en db:push:', dbPushError);
-          // Si db:push falla, intentar continuar de todas formas
-          // Puede que las tablas ya existan
-          logger.warn('⚠️ db:push falló, pero continuando... Las tablas pueden ya existir.');
-        }
-        
-        // Verificar que las tablas se crearon
-        logger.info('🔍 Verificando que las tablas existen...');
-        try {
-          const tableCheck = await prisma.$queryRaw`
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name IN ('tenants', 'users', 'conversations', 'messages')
-          `;
-          const tableCount = (tableCheck as any[]).length;
-          logger.info(`✅ Tablas encontradas: ${tableCount}`);
-          (tableCheck as any[]).forEach((t: any) => {
-            logger.info(`   - ${t.table_name}`);
-          });
-          
-          if (tableCount === 0) {
-            logger.warn('⚠️ No se encontraron tablas. Puede que db:push haya fallado.');
-            logger.warn('⚠️ El servicio continuará, pero puede fallar al procesar requests.');
-          }
-        } catch (err) {
-          logger.error('❌ Error al verificar tablas:', err);
-          logger.warn('⚠️ No se pudo verificar tablas, pero continuando...');
-        }
-        
-        // Verificar si hay datos antes de seed
-        logger.info('🔍 Verificando si hay tenants en la DB...');
-        let tenantCount = 0;
-        try {
-          tenantCount = await prisma.tenant.count();
-          logger.info(`📊 Tenants encontrados: ${tenantCount}`);
-        } catch (err) {
-          logger.error('❌ Error al contar tenants (tabla puede no existir):', err);
-          throw err;
-        }
+        const tenantCount = await prisma.tenant.count();
+        logger.info(`📊 Tenants en la DB: ${tenantCount}`);
         
         if (tenantCount === 0) {
-          logger.info('🌱 No hay tenants, ejecutando seed...');
-          logger.info('📦 Ejecutando: npx tsx prisma/seed.ts');
-          
-          execSync('npx tsx prisma/seed.ts', { 
-            stdio: 'inherit',
-            cwd: dbDir,
-            env: { ...process.env }
-          });
-          
-          logger.info('✅ Seed completado');
-          
-          // Verificar nuevamente
-          const newTenantCount = await prisma.tenant.count();
-          logger.info(`📊 Tenants después del seed: ${newTenantCount}`);
-          
-          if (newTenantCount === 0) {
-            throw new Error('El seed se ejecutó pero no creó tenants. Revisa el seed.');
-          }
-        } else {
-          logger.info('✅ Ya hay tenants en la DB, saltando seed');
+          logger.warn('⚠️ No hay tenants en la DB. El seed debería ejecutarse automáticamente.');
         }
-        
-        logger.info('✅ ============================================');
-        logger.info('✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE');
-        logger.info('✅ ============================================');
-      } catch (error) {
-        logger.error('❌ ============================================');
-        logger.error('❌ ERROR INICIALIZANDO BASE DE DATOS');
-        logger.error('❌ ============================================');
-        logger.error('Error:', error instanceof Error ? error.message : String(error));
-        if (error instanceof Error && error.stack) {
-          logger.error('Stack:', error.stack);
-        }
-        logger.error('💡 Verifica que:');
-        logger.error('   1. DATABASE_URL esté configurado correctamente');
-        logger.error('   2. La base de datos PostgreSQL esté accesible');
-        logger.error('   3. El schema.prisma esté en packages/db/prisma/');
-        logger.error('❌ El servicio continuará, pero puede fallar al procesar webhooks');
-        logger.error('❌ ============================================');
-        // No lanzar el error, dejar que el servicio continúe
+      } catch (err) {
+        logger.warn('⚠️ No se pudo contar tenants (puede ser normal si las tablas están vacías)');
       }
     }
-  } else {
-    logger.info('ℹ️ DB_INIT no está configurado, saltando inicialización');
-    logger.info('ℹ️ Si es la primera vez, configura DB_INIT=true en las Variables');
+  } catch (error) {
+    logger.error('❌ ============================================');
+    logger.error('❌ ERROR: NO SE PUEDE CONECTAR A LA BASE DE DATOS');
+    logger.error('❌ ============================================');
+    logger.error('Error:', error instanceof Error ? error.message : String(error));
+    logger.error('💡 Verifica que:');
+    logger.error('   1. DATABASE_URL esté configurado en Railway → API Service → Variables');
+    logger.error('   2. El servicio PostgreSQL esté corriendo en Railway');
+    logger.error('   3. DATABASE_URL tenga el formato correcto: postgresql://...');
+    logger.error('❌ ============================================');
+    logger.error('❌ El servicio continuará, pero fallará al procesar requests');
+    logger.error('❌ ============================================');
   }
 
   try {

@@ -6,6 +6,7 @@ builder = "NIXPACKS"
 buildCommand = "pnpm install && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/db build && pnpm --filter @customer-service/api build"
 
 [deploy]
-startCommand = "cd apps/api && DB_INIT=true pnpm start"
+# Inicializar DB antes de iniciar el servidor
+startCommand = "bash scripts/init-db-railway.sh && node apps/api/dist/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 100
