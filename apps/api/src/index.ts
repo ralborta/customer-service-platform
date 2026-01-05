@@ -120,31 +120,52 @@ async function buildApp() {
 
       logger.info({ email, passwordLength: password.length, hasTenantSlug: !!tenantSlug }, 'Login attempt');
 
-      // Find tenant if slug provided, otherwise try to find user in any tenant
-      // IMPORTANTE: Si no se especifica tenant, buscamos en el tenant "demo" por defecto
-      let tenant = null;
-      if (tenantSlug) {
-        tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-        if (!tenant) {
-          logger.warn({ tenantSlug }, 'Tenant not found');
-          return reply.code(404).send({ error: 'Tenant not found' });
-        }
-      } else {
-        // Si no se especifica tenant, usar "demo" por defecto
-        tenant = await prisma.tenant.findUnique({ where: { slug: 'demo' } });
-        if (!tenant) {
-          logger.warn('Default tenant "demo" not found, trying any tenant');
+      // Find user - buscar primero en tenant "demo", luego en cualquier tenant
+      // Esto es importante porque el usuario agent@demo.com está en el tenant "demo"
+      let user = null;
+      
+      // Primero intentar en tenant "demo"
+      const demoTenant = await prisma.tenant.findUnique({ where: { slug: 'demo' } });
+      if (demoTenant) {
+        user = await prisma.user.findUnique({
+          where: {
+            tenantId_email: {
+              tenantId: demoTenant.id,
+              email
+            }
+          },
+          include: { tenant: true }
+        });
+        logger.info({ email, foundInDemo: !!user, tenantId: demoTenant.id }, 'Searching in demo tenant');
+      }
+      
+      // Si no se encontró y se especificó un tenant, buscar ahí
+      if (!user && tenantSlug) {
+        const specifiedTenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+        if (specifiedTenant) {
+          user = await prisma.user.findUnique({
+            where: {
+              tenantId_email: {
+                tenantId: specifiedTenant.id,
+                email
+              }
+            },
+            include: { tenant: true }
+          });
+          logger.info({ email, foundInSpecified: !!user, tenantSlug }, 'Searching in specified tenant');
+        } else {
+          logger.warn({ tenantSlug }, 'Specified tenant not found');
         }
       }
-
-      // Find user - buscar en el tenant especificado o en "demo" por defecto
-      const user = await prisma.user.findFirst({
-        where: {
-          email,
-          ...(tenant ? { tenantId: tenant.id } : {})
-        },
-        include: { tenant: true }
-      });
+      
+      // Si aún no se encontró, buscar en cualquier tenant (fallback)
+      if (!user) {
+        user = await prisma.user.findFirst({
+          where: { email },
+          include: { tenant: true }
+        });
+        logger.info({ email, foundAnywhere: !!user }, 'Searching in any tenant (fallback)');
+      }
 
       if (!user) {
         logger.warn({ email }, 'User not found');
