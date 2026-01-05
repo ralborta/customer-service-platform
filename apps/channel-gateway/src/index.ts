@@ -181,25 +181,63 @@ async function getOrCreateConversation(
 
 // POST /webhooks/builderbot/whatsapp
 fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
+  const startTime = Date.now();
+  let tenantId: string | null = null;
+  
   try {
     const body = request.body as unknown;
-    const validated = WhatsAppWebhookSchema.parse(body);
-
-    // Resolve tenant (from header or account key)
-    const accountKey = (request.headers['x-account-key'] as string) || 'builderbot_whatsapp_main';
-    logger.info({ accountKey, headers: request.headers }, 'Resolving tenant for webhook');
     
-    const tenantId = await resolveTenant(accountKey);
+    // Log raw body completo para debug (limitado a 1000 chars)
+    const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+    logger.info({ 
+      bodyPreview: bodyStr.substring(0, 1000),
+      bodyType: typeof body,
+      bodyKeys: typeof body === 'object' && body !== null ? Object.keys(body) : []
+    }, '📥 Received webhook payload');
+    
+    // Resolve tenant PRIMERO (antes de validar, para tener mejor error)
+    const accountKey = (request.headers['x-account-key'] as string) || 
+                       (request.headers['x-account-key'] as string) ||
+                       'builderbot_whatsapp_main';
+    logger.info({ 
+      accountKey, 
+      headerKeys: Object.keys(request.headers),
+      hasXAccountKey: !!request.headers['x-account-key']
+    }, '🔍 Resolving tenant for webhook');
+    
+    tenantId = await resolveTenant(accountKey);
     
     if (!tenantId) {
-      logger.error({ accountKey }, 'Tenant not found - check if ChannelAccount exists or seed was run');
+      logger.error({ 
+        accountKey, 
+        bodyPreview: bodyStr.substring(0, 200),
+        error: 'Tenant resolution failed'
+      }, '❌ Tenant not found');
       return reply.code(401).send({ 
         error: 'Tenant not found',
         details: `No tenant found for accountKey: ${accountKey}. Make sure DB_INIT=true was set and seed ran successfully.`
       });
     }
     
-    logger.info({ tenantId, accountKey }, 'Tenant resolved successfully');
+    logger.info({ tenantId, accountKey }, '✅ Tenant resolved successfully');
+    
+    // Validar payload DESPUÉS de resolver tenant
+    let validated;
+    try {
+      validated = WhatsAppWebhookSchema.parse(body);
+      logger.info({ validated: JSON.stringify(validated).substring(0, 500) }, '✅ Payload validated');
+    } catch (validationError) {
+      logger.error({ 
+        error: validationError instanceof Error ? validationError.message : String(validationError),
+        bodyPreview: bodyStr.substring(0, 500),
+        tenantId
+      }, '❌ Payload validation failed');
+      return reply.code(400).send({ 
+        error: 'Invalid payload format',
+        details: validationError instanceof Error ? validationError.message : 'Unknown validation error',
+        received: body
+      });
+    }
 
     // Idempotency check
     const idempotencyKey = generateIdempotencyKey('builderbot_whatsapp', validated);
@@ -228,10 +266,16 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
     try {
       const data = validated.data;
       const fromPhone = data.from;
-      const message = data.message;
+      const message = data.message || {};
+      
+      // Extraer texto del mensaje (puede venir en 'text' o 'body')
+      const messageText = message.text || message.body || '(sin texto)';
+      
+      logger.info({ fromPhone, messageText: messageText.substring(0, 100), message }, 'Processing WhatsApp message');
 
       // Get or create customer
       const customer = await getOrCreateCustomer(tenantId, fromPhone);
+      logger.info({ customerId: customer.id, phoneNumber: fromPhone }, 'Customer resolved');
 
       // Get or create conversation
       const conversation = await getOrCreateConversation(
@@ -239,6 +283,7 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
         customer.id,
         'WHATSAPP'
       );
+      logger.info({ conversationId: conversation.id }, 'Conversation resolved');
 
       // Create message
       const dbMessage = await prisma.message.create({
@@ -246,10 +291,11 @@ fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
           conversationId: conversation.id,
           channel: 'WHATSAPP',
           direction: 'INBOUND',
-          text: message.text,
+          text: messageText,
           rawPayload: JSON.parse(JSON.stringify(validated))
         }
       });
+      logger.info({ messageId: dbMessage.id }, 'Message created in database');
 
       // Get tenant settings
       const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });

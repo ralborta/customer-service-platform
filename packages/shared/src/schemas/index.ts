@@ -18,19 +18,22 @@ export const TriageResponseSchema = z.object({
   autopilotEligible: z.boolean()
 });
 
+// Schema flexible para webhooks de Builderbot
+// Builderbot puede enviar diferentes formatos, así que hacemos el schema más permisivo
 export const WhatsAppWebhookSchema = z.object({
-  event: z.string(),
+  event: z.string().optional(),
   data: z.object({
     from: z.string(),
-    to: z.string(),
+    to: z.string().optional(),
     message: z.object({
-      id: z.string(),
+      id: z.string().optional(),
       text: z.string().optional(),
-      type: z.string(),
-      timestamp: z.number()
+      type: z.string().optional(),
+      timestamp: z.number().optional(),
+      body: z.string().optional() // Algunos proveedores usan 'body' en lugar de 'text'
     }).passthrough()
   }).passthrough()
-});
+}).passthrough(); // Permitir campos adicionales
 
 export const ElevenLabsWebhookSchema = z.object({
   call_id: z.string(),
