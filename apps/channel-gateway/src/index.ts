@@ -756,16 +756,8 @@ fastify.get('/debug/events', async (request, reply) => {
 
 const start = async () => {
   try {
-    // Register plugins
-    await fastify.register(cors, {
-      origin: true
-    });
-
-    await fastify.register(rateLimit, {
-      max: 100,
-      timeWindow: '1 minute'
-    });
-
+    // Plugins ya están registrados arriba (CORS y rate limiting)
+    // Solo necesitamos iniciar el servidor
     const port = parseInt(process.env.PORT || '3001', 10);
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });
