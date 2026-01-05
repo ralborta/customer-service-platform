@@ -17,6 +17,8 @@ const nextConfig = {
   },
   // Deshabilitar exportación estática completa (Vercel usa serverless)
   output: undefined,
+  // Deshabilitar features que pueden solicitar permisos de red local
+  poweredByHeader: false,
 };
 
 module.exports = nextConfig;
