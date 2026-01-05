@@ -55,13 +55,20 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
     
     // Fallback: Si no existe el ChannelAccount, usar el primer tenant disponible (para desarrollo)
     // En producción, deberías crear el ChannelAccount en el seed
-    logger.warn({ accountKey }, 'ChannelAccount not found, using first available tenant as fallback');
+    logger.warn({ accountKey }, 'ChannelAccount not found, trying fallback to first tenant');
     const firstTenant = await prisma.tenant.findFirst({
       orderBy: { createdAt: 'asc' }
     });
     
-    if (firstTenant) {
-      // Crear el ChannelAccount para futuras requests
+    if (!firstTenant) {
+      logger.error('No tenants found in database. Make sure DB_INIT=true and seed ran successfully.');
+      return null;
+    }
+    
+    logger.info({ tenantId: firstTenant.id, accountKey }, 'Using fallback tenant, creating ChannelAccount');
+    
+    // Crear el ChannelAccount para futuras requests
+    try {
       await prisma.channelAccount.upsert({
         where: {
           tenantId_accountKey: {
@@ -77,6 +84,11 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
           active: true
         }
       });
+      logger.info({ tenantId: firstTenant.id, accountKey }, 'ChannelAccount created successfully');
+      return firstTenant.id;
+    } catch (error) {
+      logger.error({ error, accountKey, tenantId: firstTenant.id }, 'Failed to create ChannelAccount');
+      // Aún así retornar el tenantId para que funcione
       return firstTenant.id;
     }
   }
