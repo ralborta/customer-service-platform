@@ -23,26 +23,30 @@ const fastify = Fastify({
   logger: true
 });
 
-// CORS
-fastify.register(cors, {
-  origin: true
-});
+// PASO 0: CORS DESHABILITADO (no necesario para webhooks server-to-server)
+// fastify.register(cors, {
+//   origin: true
+// });
 
-// CHECK #2: Hook onRequest usando fastify.log (no logger externo)
-fastify.addHook('onRequest', async (request, reply) => {
-  if (request.url.startsWith('/webhooks/builderbot/whatsapp')) {
+// PASO 1: Hook RAW con console.log ANTES de todo (a prueba de todo)
+fastify.addHook('onRequest', async (req, reply) => {
+  console.log('>>> ONREQUEST (RAW) url=', req.raw.url, 'method=', req.raw.method);
+  
+  if (req.url.startsWith('/webhooks/builderbot/whatsapp')) {
     fastify.log.info('🔵🔵🔵 ONREQUEST HOOK EJECUTADO 🔵🔵🔵');
-    fastify.log.info({ url: request.url, method: request.method }, 'Request intercepted by onRequest hook');
+    fastify.log.info({ url: req.url, method: req.method }, 'Request intercepted by onRequest hook');
   }
 });
 
-// CHECK #5: Hook onSend para capturar cualquier 401
-fastify.addHook('onSend', async (request, reply, payload) => {
+// PASO 4: Hook onSend para capturar 401 con console.log y headers
+fastify.addHook('onSend', async (req, reply, payload) => {
   if (reply.statusCode === 401) {
+    console.log('>>> 401 emitted for', req.raw.url);
+    console.log('>>> reply headers:', reply.getHeaders());
     fastify.log.warn({
-      url: request.url,
-      method: request.method,
-      headers: request.headers,
+      url: req.url,
+      method: req.method,
+      headers: req.headers,
       replyHeaders: reply.getHeaders()
     }, '⚠️⚠️⚠️ 401 EMITIDO - capturado en onSend ⚠️⚠️⚠️');
   }
