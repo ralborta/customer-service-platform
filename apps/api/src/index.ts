@@ -86,9 +86,6 @@ async function buildApp() {
           role: true,
           active: true,
           tenantId: true,
-          password: false // No exponer passwords
-        },
-        include: {
           tenant: {
             select: {
               name: true,
