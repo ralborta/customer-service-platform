@@ -61,8 +61,38 @@ async function resolveTenant(accountKey?: string, tenantId?: string): Promise<st
     });
     
     if (!firstTenant) {
-      logger.error('No tenants found in database. Make sure DB_INIT=true and seed ran successfully.');
-      return null;
+      logger.warn('No tenants found in database. Creating default tenant automatically...');
+      // Crear tenant por defecto si no existe ninguno
+      try {
+        const defaultTenant = await prisma.tenant.create({
+          data: {
+            name: 'Default Tenant',
+            slug: 'default',
+            settings: {
+              aiMode: 'ASSISTED',
+              autopilotCategories: ['INFO', 'TRACKING'],
+              confidenceThreshold: 0.7,
+              autopilotCallFollowup: false
+            }
+          }
+        });
+        logger.info({ tenantId: defaultTenant.id }, 'Default tenant created');
+        
+        // Crear el ChannelAccount para este tenant
+        await prisma.channelAccount.create({
+          data: {
+            tenantId: defaultTenant.id,
+            channel: accountKey.includes('builderbot') ? 'builderbot_whatsapp' : 'elevenlabs_calls',
+            accountKey,
+            active: true
+          }
+        });
+        logger.info({ tenantId: defaultTenant.id, accountKey }, 'ChannelAccount created for default tenant');
+        return defaultTenant.id;
+      } catch (error) {
+        logger.error({ error }, 'Failed to create default tenant');
+        return null;
+      }
     }
     
     logger.info({ tenantId: firstTenant.id, accountKey }, 'Using fallback tenant, creating ChannelAccount');
