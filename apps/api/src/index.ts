@@ -1290,15 +1290,21 @@ async function buildApp() {
     let builderbotMessageId: string | undefined;
     if (messageDirection === 'OUTBOUND' && messageChannel === 'WHATSAPP' && conversation.customer.phoneNumber) {
       try {
-        // Verificar que BUILDERBOT_API_KEY esté configurado
-        const apiKey = process.env.BUILDERBOT_API_KEY;
-        if (!apiKey || apiKey === '') {
-          logger.error('BUILDERBOT_API_KEY no está configurado');
+        // Verificar que BUILDERBOT_BOT_ID esté configurado (es el Project ID/token)
+        const botId = process.env.BUILDERBOT_BOT_ID;
+        if (!botId || botId === '') {
+          logger.error('BUILDERBOT_BOT_ID no está configurado');
           return reply.code(500).send({ 
             error: 'Failed to send message via WhatsApp',
-            details: 'BUILDERBOT_API_KEY no está configurado en las variables de entorno de Railway'
+            details: 'BUILDERBOT_BOT_ID no está configurado en las variables de entorno de Railway. Este es el Project ID que se usa como token de autorización.'
           });
         }
+
+        logger.info({ 
+          botId: botId.substring(0, 20) + '...', 
+          botIdLength: botId.length,
+          phoneNumber: conversation.customer.phoneNumber 
+        }, 'Enviando mensaje via Builderbot');
 
         const result = await builderbotAdapter.sendText(
           conversation.customer.phoneNumber,

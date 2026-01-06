@@ -64,11 +64,21 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
         body.metadata = opts.metadata;
       }
 
+      // Logging detallado para debugging
       console.log('[BUILDERBOT] Enviando mensaje:', {
         url: `${this.apiUrl}/v1/messages`,
+        projectId: this.projectId,
+        projectIdLength: this.projectId?.length || 0,
         hasProjectId: !!this.projectId,
-        to: toPhone,
-        textLength: text.length
+        headers: {
+          'Content-Type': headers['Content-Type'],
+          'Authorization': headers['Authorization']?.substring(0, 50) + '...' // Solo primeros 50 chars por seguridad
+        },
+        body: {
+          to: toPhone,
+          textLength: text.length,
+          hasProjectId: !!body.projectId
+        }
       });
 
       const response = await fetch(`${this.apiUrl}/v1/messages`, {
