@@ -149,3 +149,4 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
 }
 
 export const builderbotAdapter = new BuilderbotAdapterImpl();
+// FORZAR REDEPLOY - Tue Jan  6 19:45:51 -03 2026
