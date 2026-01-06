@@ -20,16 +20,12 @@ export interface BuilderbotAdapter {
 
 class BuilderbotAdapterImpl implements BuilderbotAdapter {
   private apiUrl: string;
-  private apiKey: string;
-  private botId?: string;
-  private projectId?: string;
+  private projectId: string;
 
   constructor() {
     this.apiUrl = process.env.BUILDERBOT_API_URL || 'https://api.builderbot.cloud';
-    this.apiKey = process.env.BUILDERBOT_API_KEY || '';
-    this.botId = process.env.BUILDERBOT_BOT_ID;
-    // Project ID puede venir de BUILDERBOT_PROJECT_ID o BUILDERBOT_BOT_ID (compatibilidad)
-    this.projectId = process.env.BUILDERBOT_PROJECT_ID || process.env.BUILDERBOT_BOT_ID;
+    // BUILDERBOT_BOT_ID es el Project ID que se usa como token de autorización
+    this.projectId = process.env.BUILDERBOT_BOT_ID || process.env.BUILDERBOT_PROJECT_ID || '';
   }
 
   async sendText(
@@ -37,12 +33,12 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     text: string,
     opts?: BuilderbotMessageOptions
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    // Verificar que Project ID esté configurado (es el token de autorización)
+    // Verificar que BUILDERBOT_BOT_ID esté configurado (es el Project ID que se usa como token)
     if (!this.projectId || this.projectId === '') {
-      console.log('[BUILDERBOT] Project ID no configurado');
+      console.log('[BUILDERBOT] BUILDERBOT_BOT_ID no configurado');
       return { 
         success: false, 
-        error: 'BUILDERBOT_PROJECT_ID o BUILDERBOT_BOT_ID no está configurado. Verifica las variables de entorno en Railway.' 
+        error: 'BUILDERBOT_BOT_ID no está configurado. Verifica las variables de entorno en Railway.' 
       };
     }
 
