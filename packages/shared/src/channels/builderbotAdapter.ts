@@ -37,53 +37,28 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     text: string,
     opts?: BuilderbotMessageOptions
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    // Verificar que API key esté configurado
-    if (!this.apiKey || this.apiKey === '') {
-      console.log('[BUILDERBOT] API Key no configurado, usando mock');
+    // Verificar que Project ID esté configurado (es el token de autorización)
+    if (!this.projectId || this.projectId === '') {
+      console.log('[BUILDERBOT] Project ID no configurado');
       return { 
         success: false, 
-        error: 'BUILDERBOT_API_KEY no está configurado. Verifica las variables de entorno en Railway.' 
+        error: 'BUILDERBOT_PROJECT_ID o BUILDERBOT_BOT_ID no está configurado. Verifica las variables de entorno en Railway.' 
       };
     }
 
     try {
-      // Preparar headers - Builderbot puede requerir diferentes formatos
+      // Headers mínimos - Builderbot solo necesita Project ID como token
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.projectId}`,
       };
 
-      // Builderbot requiere Project ID como token de autorización
-      // El error "Access Project Middleware: Unauthorized: Token is missing" indica que el Authorization debe ser el projectId
-      if (this.projectId) {
-        // Project ID como Bearer token (requerido por Builderbot)
-        headers['Authorization'] = `Bearer ${this.projectId}`;
-        // También como header X-Project-Id (por si acaso)
-        headers['X-Project-Id'] = this.projectId;
-      } else if (this.apiKey) {
-        // Fallback: usar API key si no hay projectId
-        headers['Authorization'] = `Bearer ${this.apiKey}`;
-      }
-
-      // API Key como header adicional (si está disponible y diferente del projectId)
-      if (this.apiKey && this.apiKey !== this.projectId) {
-        headers['X-API-Key'] = this.apiKey;
-      }
-
-      // Bot ID si está disponible (separado del projectId)
-      if (this.botId && this.botId !== this.projectId) {
-        headers['X-Bot-Id'] = this.botId;
-      }
-
-      // Preparar body
+      // Body mínimo - solo lo esencial
       const body: Record<string, unknown> = {
         to: toPhone,
         text,
+        projectId: this.projectId, // Project ID en el body también
       };
-
-      // Agregar projectId al body si está disponible (algunos APIs lo requieren así)
-      if (this.projectId) {
-        body.projectId = this.projectId;
-      }
 
       if (opts?.buttons) {
         body.buttons = opts.buttons;
@@ -95,10 +70,7 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
 
       console.log('[BUILDERBOT] Enviando mensaje:', {
         url: `${this.apiUrl}/v1/messages`,
-        headers: Object.keys(headers),
-        hasApiKey: !!this.apiKey,
         hasProjectId: !!this.projectId,
-        hasBotId: !!this.botId,
         to: toPhone,
         textLength: text.length
       });
@@ -115,7 +87,6 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
         console.error('[BUILDERBOT] Error response:', {
           status: response.status,
           statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
           body: responseText
         });
         return { success: false, error: responseText };
