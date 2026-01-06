@@ -28,7 +28,8 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     this.apiUrl = process.env.BUILDERBOT_API_URL || 'https://api.builderbot.cloud';
     this.apiKey = process.env.BUILDERBOT_API_KEY || '';
     this.botId = process.env.BUILDERBOT_BOT_ID;
-    this.projectId = process.env.BUILDERBOT_PROJECT_ID;
+    // Project ID puede venir de BUILDERBOT_PROJECT_ID o BUILDERBOT_BOT_ID (compatibilidad)
+    this.projectId = process.env.BUILDERBOT_PROJECT_ID || process.env.BUILDERBOT_BOT_ID;
   }
 
   async sendText(
@@ -51,24 +52,25 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
         'Content-Type': 'application/json',
       };
 
-      // Intentar diferentes formatos de autenticación
-      // Formato 1: Bearer token (estándar)
-      if (this.apiKey) {
+      // Builderbot requiere Project ID como token de autorización
+      // El error "Access Project Middleware: Unauthorized: Token is missing" indica que el Authorization debe ser el projectId
+      if (this.projectId) {
+        // Project ID como Bearer token (requerido por Builderbot)
+        headers['Authorization'] = `Bearer ${this.projectId}`;
+        // También como header X-Project-Id (por si acaso)
+        headers['X-Project-Id'] = this.projectId;
+      } else if (this.apiKey) {
+        // Fallback: usar API key si no hay projectId
         headers['Authorization'] = `Bearer ${this.apiKey}`;
       }
 
-      // Formato 2: X-API-Key (alternativo)
-      if (this.apiKey) {
+      // API Key como header adicional (si está disponible y diferente del projectId)
+      if (this.apiKey && this.apiKey !== this.projectId) {
         headers['X-API-Key'] = this.apiKey;
       }
 
-      // Project ID si está disponible
-      if (this.projectId) {
-        headers['X-Project-Id'] = this.projectId;
-      }
-
-      // Bot ID si está disponible
-      if (this.botId) {
+      // Bot ID si está disponible (separado del projectId)
+      if (this.botId && this.botId !== this.projectId) {
         headers['X-Bot-Id'] = this.botId;
       }
 
