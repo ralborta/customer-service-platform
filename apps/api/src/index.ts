@@ -573,29 +573,41 @@ async function buildApp() {
         });
       }
 
-      // Idempotency check
+      // Idempotency check (opcional si event_logs existe)
       const idempotencyKey = generateIdempotencyKey('builderbot_whatsapp', validated);
-      const existingEvent = await prisma.eventLog.findUnique({
-        where: { idempotencyKey }
-      });
+      let existingEvent = null;
+      
+      try {
+        existingEvent = await prisma.eventLog.findUnique({
+          where: { idempotencyKey }
+        });
 
-      if (existingEvent && existingEvent.status === 'processed') {
-        return reply.code(200).send({ status: 'already_processed', eventId: existingEvent.id });
-      }
-
-      // Log event
-      eventLog = await prisma.eventLog.upsert({
-        where: { idempotencyKey },
-        update: { retryCount: { increment: 1 } },
-        create: {
-          tenantId,
-          idempotencyKey,
-          source: 'builderbot_whatsapp',
-          type: validated.event || 'message.received',
-          rawPayload: JSON.parse(JSON.stringify(validated)),
-          status: 'pending'
+        if (existingEvent && existingEvent.status === 'processed') {
+          return reply.code(200).send({ status: 'already_processed', eventId: existingEvent.id });
         }
-      });
+
+        // Log event
+        eventLog = await prisma.eventLog.upsert({
+          where: { idempotencyKey },
+          update: { retryCount: { increment: 1 } },
+          create: {
+            tenantId,
+            idempotencyKey,
+            source: 'builderbot_whatsapp',
+            type: validated.event || 'message.received',
+            rawPayload: JSON.parse(JSON.stringify(validated)),
+            status: 'pending'
+          }
+        });
+      } catch (eventLogError: any) {
+        // Si la tabla event_logs no existe, continuar sin logging de eventos
+        if (eventLogError?.message?.includes('does not exist') || eventLogError?.message?.includes('event_logs')) {
+          logger.warn('⚠️ Tabla event_logs no existe, continuando sin logging de eventos. Ejecuta: pnpm --filter @customer-service/db db:push');
+          eventLog = null; // No hay eventLog, pero continuamos
+        } else {
+          throw eventLogError; // Otro error, re-lanzar
+        }
+      }
 
       try {
         const data = validated.data;
@@ -762,11 +774,18 @@ async function buildApp() {
           }
         }
 
-        // Mark event as processed
-        await prisma.eventLog.update({
-          where: { id: eventLog.id },
-          data: { status: 'processed', processedAt: new Date() }
-        });
+        // Mark event as processed (si eventLog existe)
+        if (eventLog) {
+          try {
+            await prisma.eventLog.update({
+              where: { id: eventLog.id },
+              data: { status: 'processed', processedAt: new Date() }
+            });
+          } catch (error) {
+            // Si falla, no es crítico, el mensaje ya se procesó
+            logger.warn({ error }, 'No se pudo actualizar eventLog, pero el mensaje se procesó correctamente');
+          }
+        }
 
         const responseTime = Date.now() - startTime;
         logger.info({ 
@@ -792,13 +811,18 @@ async function buildApp() {
         }, '❌ Error processing message');
         
         if (eventLog) {
-          await prisma.eventLog.update({
-            where: { id: eventLog.id },
-            data: {
-              status: 'failed',
-              error: errorMessage
-            }
-          });
+          try {
+            await prisma.eventLog.update({
+              where: { id: eventLog.id },
+              data: {
+                status: 'failed',
+                error: errorMessage
+              }
+            });
+          } catch (updateError) {
+            // Si falla actualizar eventLog, no es crítico
+            logger.warn({ error: updateError }, 'No se pudo actualizar eventLog con error');
+          }
         }
         
         return reply.code(500).send({ 
@@ -830,28 +854,41 @@ async function buildApp() {
       const accountKey = (request.headers['x-account-key'] as string) || 'elevenlabs_calls_main';
       const tenantId = await resolveTenant(accountKey);
 
-      // Idempotency
+      // Idempotency (opcional si event_logs existe)
       const idempotencyKey = generateIdempotencyKey('elevenlabs_post_call', validated);
-      const existingEvent = await prisma.eventLog.findUnique({
-        where: { idempotencyKey }
-      });
+      let existingEvent = null;
+      let eventLog: any = null;
+      
+      try {
+        existingEvent = await prisma.eventLog.findUnique({
+          where: { idempotencyKey }
+        });
 
-      if (existingEvent && existingEvent.status === 'processed') {
-        return reply.code(200).send({ status: 'already_processed', eventId: existingEvent.id });
-      }
-
-      const eventLog = await prisma.eventLog.upsert({
-        where: { idempotencyKey },
-        update: { retryCount: { increment: 1 } },
-        create: {
-          tenantId,
-          idempotencyKey,
-          source: 'elevenlabs_post_call',
-          type: 'call.completed',
-          rawPayload: JSON.parse(JSON.stringify(validated)),
-          status: 'pending'
+        if (existingEvent && existingEvent.status === 'processed') {
+          return reply.code(200).send({ status: 'already_processed', eventId: existingEvent.id });
         }
-      });
+
+        eventLog = await prisma.eventLog.upsert({
+          where: { idempotencyKey },
+          update: { retryCount: { increment: 1 } },
+          create: {
+            tenantId,
+            idempotencyKey,
+            source: 'elevenlabs_post_call',
+            type: 'call.completed',
+            rawPayload: JSON.parse(JSON.stringify(validated)),
+            status: 'pending'
+          }
+        });
+      } catch (eventLogError: any) {
+        // Si la tabla event_logs no existe, continuar sin logging de eventos
+        if (eventLogError?.message?.includes('does not exist') || eventLogError?.message?.includes('event_logs')) {
+          logger.warn('⚠️ Tabla event_logs no existe, continuando sin logging de eventos');
+          eventLog = null;
+        } else {
+          throw eventLogError;
+        }
+      }
 
       try {
         const phoneNumber = validated.phone_number;
@@ -926,20 +963,32 @@ async function buildApp() {
           }
         }
 
-        await prisma.eventLog.update({
-          where: { id: eventLog.id },
-          data: { status: 'processed', processedAt: new Date() }
-        });
+        if (eventLog) {
+          try {
+            await prisma.eventLog.update({
+              where: { id: eventLog.id },
+              data: { status: 'processed', processedAt: new Date() }
+            });
+          } catch (error) {
+            logger.warn({ error }, 'No se pudo actualizar eventLog, pero el call se procesó correctamente');
+          }
+        }
 
         return reply.code(200).send({ status: 'processed', callSessionId: callSession.id });
       } catch (error) {
-        await prisma.eventLog.update({
-          where: { id: eventLog.id },
-          data: {
-            status: 'failed',
-            error: error instanceof Error ? error.message : 'Unknown error'
+        if (eventLog) {
+          try {
+            await prisma.eventLog.update({
+              where: { id: eventLog.id },
+              data: {
+                status: 'failed',
+                error: error instanceof Error ? error.message : 'Unknown error'
+              }
+            });
+          } catch (updateError) {
+            logger.warn({ error: updateError }, 'No se pudo actualizar eventLog con error');
           }
-        });
+        }
         throw error;
       }
     } catch (error) {
@@ -998,25 +1047,44 @@ async function buildApp() {
       const { limit = '20' } = request.query as { limit?: string };
       const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
       
-      const events = await prisma.eventLog.findMany({
-        take: limitNum,
-        orderBy: { createdAt: 'desc' },
-        where: {
-          source: 'builderbot_whatsapp'
+      // Verificar si la tabla existe antes de consultar
+      try {
+        const events = await prisma.eventLog.findMany({
+          take: limitNum,
+          orderBy: { createdAt: 'desc' },
+          where: {
+            source: 'builderbot_whatsapp'
+          }
+        });
+        
+        const stats = {
+          total: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp' } }),
+          processed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'processed' } }),
+          pending: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'pending' } }),
+          failed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'failed' } })
+        };
+        
+        return {
+          events,
+          stats
+        };
+      } catch (dbError: any) {
+        // Si la tabla no existe, devolver mensaje útil
+        if (dbError?.message?.includes('does not exist') || dbError?.message?.includes('event_logs')) {
+          return {
+            error: 'Table event_logs does not exist',
+            message: 'Please run: pnpm --filter @customer-service/db db:push',
+            events: [],
+            stats: {
+              total: 0,
+              processed: 0,
+              pending: 0,
+              failed: 0
+            }
+          };
         }
-      });
-      
-      const stats = {
-        total: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp' } }),
-        processed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'processed' } }),
-        pending: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'pending' } }),
-        failed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'failed' } })
-      };
-      
-      return {
-        events,
-        stats
-      };
+        throw dbError;
+      }
     } catch (error) {
       logger.error({ error }, 'Debug events error');
       return reply.code(500).send({ 
