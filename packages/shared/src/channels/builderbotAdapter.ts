@@ -20,12 +20,14 @@ export interface BuilderbotAdapter {
 
 class BuilderbotAdapterImpl implements BuilderbotAdapter {
   private apiUrl: string;
-  private projectId: string;
+  private botId: string;
+  private apiKey: string;
 
   constructor() {
-    this.apiUrl = process.env.BUILDERBOT_API_URL || 'https://api.builderbot.cloud';
-    // BUILDERBOT_BOT_ID es el Project ID que se usa como token de autorización
-    this.projectId = process.env.BUILDERBOT_BOT_ID || process.env.BUILDERBOT_PROJECT_ID || '';
+    // Builderbot API v2 usa app.builderbot.cloud, no api.builderbot.cloud
+    this.apiUrl = process.env.BUILDERBOT_API_URL || process.env.BUILDERBOT_BASE_URL || 'https://app.builderbot.cloud';
+    this.botId = process.env.BUILDERBOT_BOT_ID || '';
+    this.apiKey = process.env.BUILDERBOT_API_KEY || '';
   }
 
   async sendText(
@@ -33,8 +35,8 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     text: string,
     opts?: BuilderbotMessageOptions
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    // Verificar que BUILDERBOT_BOT_ID esté configurado (es el Project ID que se usa como token)
-    if (!this.projectId || this.projectId === '') {
+    // Verificar que BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY estén configurados
+    if (!this.botId || this.botId === '') {
       console.log('[BUILDERBOT] BUILDERBOT_BOT_ID no configurado');
       return { 
         success: false, 
@@ -42,58 +44,56 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
       };
     }
 
+    if (!this.apiKey || this.apiKey === '') {
+      console.log('[BUILDERBOT] BUILDERBOT_API_KEY no configurado');
+      return { 
+        success: false, 
+        error: 'BUILDERBOT_API_KEY no está configurado. Verifica las variables de entorno en Railway.' 
+      };
+    }
+
     try {
-      // Builderbot puede requerir el token en diferentes formatos
-      // El error "Token is missing" sugiere que el middleware busca el token de forma específica
+      // Builderbot API v2 usa este formato (basado en el proyecto que funciona)
+      // URL: https://app.builderbot.cloud/api/v2/{BOT_ID}/messages
+      // Header: x-api-builderbot: {API_KEY}
+      // Body: { messages: { content: text }, number: phone, checkIfExists: false }
+      
+      const url = `${this.apiUrl}/api/v2/${this.botId}/messages`;
+      
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'x-api-builderbot': this.apiKey, // Este es el header correcto para Builderbot API v2
       };
 
-      // Intentar múltiples formatos de Authorization:
-      // 1. Token directo sin "Bearer" (algunos APIs lo requieren así)
-      headers['Authorization'] = this.projectId;
-      
-      // 2. También intentar con Bearer (por si acaso)
-      // headers['Authorization'] = `Bearer ${this.projectId}`;
-      
-      // 3. Headers adicionales que algunos APIs requieren
-      headers['X-Project-Id'] = this.projectId;
-      headers['X-Token'] = this.projectId;
-
-      // Body - Incluir token en múltiples campos por si Builderbot lo busca en diferentes lugares
+      // Formato del body según Builderbot API v2
       const body: Record<string, unknown> = {
-        to: toPhone,
-        text,
-        projectId: this.projectId,
-        token: this.projectId, // Algunos APIs buscan "token" en lugar de "projectId"
+        messages: {
+          content: text,
+        },
+        number: toPhone, // Número en formato internacional (ej: 5491112345678)
+        checkIfExists: false,
       };
 
-      if (opts?.buttons) {
-        body.buttons = opts.buttons;
+      // Agregar mediaUrl si se proporciona en metadata
+      if (opts?.metadata && 'mediaUrl' in opts.metadata) {
+        (body.messages as Record<string, unknown>).mediaUrl = opts.metadata.mediaUrl;
       }
 
-      if (opts?.metadata) {
-        body.metadata = opts.metadata;
+      // Agregar buttons si se proporcionan
+      if (opts?.buttons && opts.buttons.length > 0) {
+        (body.messages as Record<string, unknown>).buttons = opts.buttons;
       }
 
       // Logging detallado para debugging
-      console.log('[BUILDERBOT] Enviando mensaje:', {
-        url: `${this.apiUrl}/v1/messages`,
-        projectId: this.projectId,
-        projectIdLength: this.projectId?.length || 0,
-        hasProjectId: !!this.projectId,
-        headers: {
-          'Content-Type': headers['Content-Type'],
-          'Authorization': headers['Authorization']?.substring(0, 50) + '...' // Solo primeros 50 chars por seguridad
-        },
-        body: {
-          to: toPhone,
-          textLength: text.length,
-          hasProjectId: !!body.projectId
-        }
+      console.log('[BUILDERBOT] Enviando mensaje (API v2):', {
+        url,
+        botId: this.botId.substring(0, 20) + '...',
+        hasApiKey: !!this.apiKey,
+        number: toPhone,
+        textLength: text.length,
       });
 
-      const response = await fetch(`${this.apiUrl}/v1/messages`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(body)
@@ -110,18 +110,18 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
         return { success: false, error: responseText };
       }
 
-      let data: { messageId?: string; id?: string };
+      let data: { messageId?: string; id?: string; [key: string]: unknown };
       try {
-        data = JSON.parse(responseText) as { messageId?: string; id?: string };
+        data = JSON.parse(responseText) as { messageId?: string; id?: string; [key: string]: unknown };
       } catch {
         // Si no es JSON, usar el texto como messageId
         data = { messageId: responseText };
       }
 
-      console.log('[BUILDERBOT] Mensaje enviado exitosamente:', data);
+      console.log('[BUILDERBOT] ✅ Mensaje enviado exitosamente:', data);
       return { success: true, messageId: data.messageId || data.id };
     } catch (error) {
-      console.error('[BUILDERBOT] Error al enviar:', error);
+      console.error('[BUILDERBOT] ❌ Error al enviar:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
