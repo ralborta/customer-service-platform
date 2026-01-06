@@ -5,10 +5,11 @@ import { prisma } from '@customer-service/db';
 import { authenticate, type AuthUser } from './middleware/auth';
 import { performTriage } from './services/triage';
 import { getTrackingProvider } from './services/tracking';
-import { TriageRequestSchema, TrackingLookupSchema, CreateQuoteSchema } from '@customer-service/shared';
+import { TriageRequestSchema, TrackingLookupSchema, CreateQuoteSchema, WhatsAppWebhookSchema, ElevenLabsWebhookSchema } from '@customer-service/shared';
 import { builderbotAdapter } from '@customer-service/shared';
 import * as bcrypt from 'bcryptjs';
 import pino from 'pino';
+import { createHash } from 'crypto';
 
 const logger = pino({
   transport: {
@@ -290,75 +291,204 @@ async function buildApp() {
     }
   });
 
-  // AI Triage - INTERNAL ENDPOINT (no auth required, uses internal token)
+  // AI Triage - Puede ser llamado con auth JWT o sin auth (para uso interno)
   fastify.post('/ai/triage', async (request, reply) => {
-    // Check for internal API token (from Channel Gateway)
-    const authHeader = request.headers.authorization;
-    const internalToken = process.env.INTERNAL_API_TOKEN || 'internal-token';
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      if (token === internalToken) {
-        // Internal call from Channel Gateway - no user auth needed
-        const body = request.body as unknown;
-        const validated = TriageRequestSchema.parse(body);
+    const body = request.body as unknown;
+    let validated: { conversationId: string; lastMessageId: string; channel: string };
+    let tenantId: string | null = null;
 
-        try {
-          // Verify conversation exists
-          const conversation = await prisma.conversation.findUnique({
-            where: { id: validated.conversationId }
-          });
-
-          if (!conversation) {
-            return reply.code(404).send({ error: 'Conversation not found' });
-          }
-
-          const result = await performTriage(
-            validated.conversationId,
-            validated.lastMessageId,
-            validated.channel
-          );
-
-          return result;
-        } catch (error) {
-          logger.error(error, 'Triage error');
-          return reply.code(500).send({ error: 'Triage failed' });
-        }
-      }
+    try {
+      validated = TriageRequestSchema.parse(body);
+    } catch (error) {
+      return reply.code(400).send({ error: 'Invalid request body', details: error instanceof Error ? error.message : 'Unknown error' });
     }
-    
-    // If no valid internal token, require user authentication
+
+    // Intentar autenticación JWT (opcional)
     try {
       await request.jwtVerify();
       const user = request.user as AuthUser;
-      const body = request.body as unknown;
-      const validated = TriageRequestSchema.parse(body);
+      tenantId = user.tenantId;
 
-      try {
-        // Verify conversation belongs to tenant
-        const conversation = await prisma.conversation.findUnique({
-          where: { id: validated.conversationId }
-        });
+      // Verify conversation belongs to tenant
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: validated.conversationId }
+      });
 
-        if (!conversation || conversation.tenantId !== user.tenantId) {
-          return reply.code(404).send({ error: 'Conversation not found' });
-        }
-
-        const result = await performTriage(
-          validated.conversationId,
-          validated.lastMessageId,
-          validated.channel
-        );
-
-        return result;
-      } catch (error) {
-        logger.error(error, 'Triage error');
-        return reply.code(500).send({ error: 'Triage failed' });
+      if (!conversation || conversation.tenantId !== user.tenantId) {
+        return reply.code(404).send({ error: 'Conversation not found' });
       }
     } catch (err) {
-      return reply.code(401).send({ error: 'Unauthorized' });
+      // Si no hay JWT, verificar que la conversación existe (uso interno)
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: validated.conversationId }
+      });
+
+      if (!conversation) {
+        return reply.code(404).send({ error: 'Conversation not found' });
+      }
+      tenantId = conversation.tenantId;
+    }
+
+    try {
+      const result = await performTriage(
+        validated.conversationId,
+        validated.lastMessageId,
+        validated.channel
+      );
+
+      return result;
+    } catch (error) {
+      logger.error(error, 'Triage error');
+      return reply.code(500).send({ error: 'Triage failed', details: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
+
+  // Helper: Generate idempotency key from payload
+  function generateIdempotencyKey(source: string, payload: unknown): string {
+    const payloadStr = JSON.stringify(payload);
+    const hash = createHash('sha256').update(`${source}:${payloadStr}`).digest('hex');
+    return hash;
+  }
+
+  // Helper: Resolve tenant from header or channel account
+  // IMPORTANTE: Esta función NUNCA debe retornar null - siempre debe retornar un tenant
+  async function resolveTenant(accountKey?: string, tenantId?: string): Promise<string> {
+    logger.info({ accountKey, tenantId }, '🔍 resolveTenant called');
+    
+    if (tenantId) {
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      if (tenant) {
+        logger.info({ tenantId, tenantSlug: tenant.slug }, '✅ Tenant encontrado por ID');
+        return tenant.id;
+      }
+    }
+    
+    if (accountKey) {
+      // Buscar ChannelAccount
+      logger.info({ accountKey }, 'Buscando ChannelAccount...');
+      const account = await prisma.channelAccount.findFirst({
+        where: { accountKey, active: true },
+        include: { tenant: true }
+      });
+      
+      if (account) {
+        logger.info({ accountKey, tenantId: account.tenantId, tenantSlug: account.tenant.slug }, '✅ ChannelAccount encontrado');
+        return account.tenantId;
+      }
+      
+      logger.warn({ accountKey }, '⚠️ ChannelAccount not found');
+    }
+    
+    // FALLBACK: Buscar cualquier tenant disponible
+    logger.warn('Buscando cualquier tenant disponible...');
+    let tenant = await prisma.tenant.findFirst({
+      orderBy: { createdAt: 'asc' }
+    });
+    
+    if (!tenant) {
+      // ÚLTIMO RECURSO: Crear tenant por defecto
+      logger.warn('🔄 No hay tenants, creando tenant por defecto...');
+      try {
+        tenant = await prisma.tenant.create({
+          data: {
+            name: 'Default Tenant',
+            slug: 'default',
+            settings: {
+              aiMode: 'ASSISTED',
+              autopilotCategories: ['INFO', 'TRACKING'],
+              confidenceThreshold: 0.7,
+              autopilotCallFollowup: false
+            }
+          }
+        });
+        logger.info({ tenantId: tenant.id }, '✅ Tenant por defecto creado');
+      } catch (error) {
+        logger.error({ error }, '❌ FALLÓ crear tenant por defecto');
+        throw new Error('No se pudo crear tenant. Verifica la conexión a la DB.');
+      }
+    }
+    
+    // Crear ChannelAccount si no existe
+    if (accountKey) {
+      try {
+        await prisma.channelAccount.upsert({
+          where: {
+            tenantId_accountKey: {
+              tenantId: tenant.id,
+              accountKey
+            }
+          },
+          update: { active: true },
+          create: {
+            tenantId: tenant.id,
+            channel: accountKey.includes('builderbot') ? 'builderbot_whatsapp' : 'elevenlabs_calls',
+            accountKey,
+            active: true
+          }
+        });
+        logger.info({ tenantId: tenant.id, accountKey }, '✅ ChannelAccount creado/actualizado');
+      } catch (error) {
+        logger.warn({ error }, '⚠️ Error al crear ChannelAccount, pero continuando con tenant');
+      }
+    }
+    
+    logger.info({ tenantId: tenant.id, tenantSlug: tenant.slug }, '✅ Tenant resuelto');
+    return tenant.id;
+  }
+
+  // Helper: Get or create customer by phone
+  async function getOrCreateCustomer(tenantId: string, phoneNumber: string, name?: string) {
+    let customer = await prisma.customer.findFirst({
+      where: {
+        tenantId,
+        phoneNumber
+      }
+    });
+
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          tenantId,
+          phoneNumber,
+          name: name || `Cliente ${phoneNumber}`,
+          email: undefined
+        }
+      });
+    }
+
+    return customer;
+  }
+
+  // Helper: Get or create conversation
+  async function getOrCreateConversation(
+    tenantId: string,
+    customerId: string,
+    channel: string
+  ) {
+    let conversation = await prisma.conversation.findFirst({
+      where: {
+        tenantId,
+        customerId,
+        primaryChannel: channel,
+        status: { in: ['OPEN', 'PENDING'] }
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          tenantId,
+          customerId,
+          primaryChannel: channel,
+          status: 'OPEN',
+          priority: 'MEDIUM'
+        }
+      });
+    }
+
+    return conversation;
+  }
 
   // Protected routes (all other routes require auth)
   // Excluir rutas públicas del hook de autenticación
@@ -367,10 +497,14 @@ async function buildApp() {
     const publicRoutes = [
       '/auth/login',
       '/health',
+      '/__ping',
       '/debug/users',
       '/debug/login-status',
       '/debug/fix-password',
       '/debug/test-password',
+      '/debug/messages',
+      '/debug/events',
+      '/webhooks/', // Todas las rutas de webhooks son públicas
       '/ai/triage' // Tiene su propia autenticación interna
     ];
     
@@ -382,6 +516,519 @@ async function buildApp() {
     // Para todas las demás rutas, aplicar autenticación
     return authenticate(request, reply);
   });
+
+  // ============================================
+  // WEBHOOKS (Públicos - sin autenticación)
+  // ============================================
+
+  // POST /webhooks/builderbot/whatsapp
+  fastify.post('/webhooks/builderbot/whatsapp', async (request, reply) => {
+    const startTime = Date.now();
+    let tenantId: string | null = null;
+    let eventLog: any = null;
+    
+    try {
+      const body = request.body as unknown;
+      
+      logger.info('========================================');
+      logger.info('📥 WEBHOOK RECIBIDO (Builderbot)');
+      logger.info('========================================');
+      logger.info({ 
+        method: request.method,
+        url: request.url,
+        headers: Object.keys(request.headers),
+        bodyPreview: typeof body === 'string' ? body.substring(0, 200) : JSON.stringify(body).substring(0, 200)
+      }, '📥 Received webhook payload');
+      
+      // Resolve tenant PRIMERO
+      const accountKey = (request.headers['x-account-key'] as string) || 'builderbot_whatsapp_main';
+      logger.info({ accountKey }, '🔍 Resolving tenant for webhook');
+      
+      try {
+        tenantId = await resolveTenant(accountKey);
+        logger.info({ tenantId, accountKey }, '✅ Tenant resolved successfully');
+      } catch (error) {
+        logger.error({ 
+          error: error instanceof Error ? error.message : String(error),
+          accountKey
+        }, '❌ ERROR CRÍTICO: No se pudo resolver tenant');
+        return reply.code(500).send({ 
+          error: 'Database error',
+          details: error instanceof Error ? error.message : 'Could not resolve tenant. Check database connection.'
+        });
+      }
+      
+      // Validar payload
+      let validated;
+      try {
+        validated = WhatsAppWebhookSchema.parse(body);
+        logger.info('✅ Payload validated');
+      } catch (validationError) {
+        logger.error({ 
+          error: validationError instanceof Error ? validationError.message : String(validationError)
+        }, '❌ Payload validation failed');
+        return reply.code(400).send({ 
+          error: 'Invalid payload format',
+          details: validationError instanceof Error ? validationError.message : 'Unknown validation error'
+        });
+      }
+
+      // Idempotency check
+      const idempotencyKey = generateIdempotencyKey('builderbot_whatsapp', validated);
+      const existingEvent = await prisma.eventLog.findUnique({
+        where: { idempotencyKey }
+      });
+
+      if (existingEvent && existingEvent.status === 'processed') {
+        return reply.code(200).send({ status: 'already_processed', eventId: existingEvent.id });
+      }
+
+      // Log event
+      eventLog = await prisma.eventLog.upsert({
+        where: { idempotencyKey },
+        update: { retryCount: { increment: 1 } },
+        create: {
+          tenantId,
+          idempotencyKey,
+          source: 'builderbot_whatsapp',
+          type: validated.event || 'message.received',
+          rawPayload: JSON.parse(JSON.stringify(validated)),
+          status: 'pending'
+        }
+      });
+
+      try {
+        const data = validated.data;
+        const fromPhone = data.from;
+        const message = data.message || {};
+        
+        // Extraer texto del mensaje
+        let messageText: string;
+        if (typeof message.text === 'string') {
+          messageText = message.text;
+        } else if (typeof message.body === 'string') {
+          messageText = message.body;
+        } else if (typeof message === 'string') {
+          messageText = message;
+        } else {
+          messageText = '(sin texto)';
+        }
+        
+        logger.info({ fromPhone, messageText: messageText.substring(0, 100) }, 'Processing WhatsApp message');
+
+        // Get or create customer
+        const customer = await getOrCreateCustomer(tenantId, fromPhone);
+        logger.info({ customerId: customer.id, phoneNumber: fromPhone }, '✅ Customer resolved');
+
+        // Get or create conversation
+        const conversation = await getOrCreateConversation(
+          tenantId,
+          customer.id,
+          'WHATSAPP'
+        );
+        logger.info({ conversationId: conversation.id }, '✅ Conversation resolved');
+
+        // Create message
+        const dbMessage = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            channel: 'WHATSAPP',
+            direction: 'INBOUND',
+            text: messageText,
+            rawPayload: JSON.parse(JSON.stringify(validated))
+          }
+        });
+        logger.info({ messageId: dbMessage.id }, '✅ Message created in database');
+
+        // Get tenant settings
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+        const settings = (tenant?.settings as Record<string, unknown>) || {};
+        const aiMode = (settings.aiMode as string) || 'ASSISTED';
+        const autopilotCategories = (settings.autopilotCategories as string[]) || [];
+
+        // Call triage DIRECTLY (no HTTP call)
+        let triageResult;
+        try {
+          triageResult = await performTriage(
+            conversation.id,
+            dbMessage.id,
+            'whatsapp'
+          );
+          logger.info({ intent: triageResult.intent, confidence: triageResult.confidence }, '✅ Triage completed');
+        } catch (triageError) {
+          logger.warn({ error: triageError }, 'Triage failed, using fallback');
+          // Fallback simple
+          const messageTextLower = messageText.toLowerCase();
+          let intent = 'otro';
+          let confidence = 0.5;
+
+          if (messageTextLower.includes('seguimiento') || messageTextLower.includes('tracking') || messageTextLower.includes('pedido')) {
+            intent = 'tracking';
+            confidence = 0.8;
+          } else if (messageTextLower.includes('factura') || messageTextLower.includes('deuda') || messageTextLower.includes('pago')) {
+            intent = 'facturacion';
+            confidence = 0.8;
+          } else if (messageTextLower.includes('reclamo') || messageTextLower.includes('problema') || messageTextLower.includes('dañado')) {
+            intent = 'reclamo';
+            confidence = 0.9;
+          }
+
+          triageResult = {
+            intent,
+            confidence,
+            suggestedReply: 'Gracias por contactarnos. Estamos procesando tu consulta.',
+            autopilotEligible: false,
+            suggestedActions: [],
+            missingFields: []
+          };
+        }
+
+        const category = triageResult.intent.toUpperCase();
+        const autopilotEligible = triageResult.autopilotEligible && autopilotCategories.includes(category);
+
+        // Create or update ticket
+        let ticket = await prisma.ticket.findFirst({
+          where: { conversationId: conversation.id, status: { not: 'CLOSED' } }
+        });
+
+        if (!ticket) {
+          ticket = await prisma.ticket.create({
+            data: {
+              tenantId,
+              conversationId: conversation.id,
+              number: `TKT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              status: 'NEW',
+              category,
+              priority: category === 'RECLAMO' ? 'HIGH' : 'MEDIUM',
+              title: `Consulta ${category}`
+            }
+          });
+        }
+
+        // Update message with metadata from triage
+        await prisma.message.update({
+          where: { id: dbMessage.id },
+          data: {
+            metadata: JSON.parse(JSON.stringify({
+              intent: triageResult.intent,
+              confidence: triageResult.confidence,
+              suggestedReply: triageResult.suggestedReply,
+              suggestedActions: triageResult.suggestedActions,
+              autopilotEligible
+            }))
+          }
+        });
+
+        // Update conversation priority based on intent
+        let conversationPriority = 'MEDIUM';
+        if (category === 'RECLAMO' || triageResult.confidence > 0.9) {
+          conversationPriority = 'HIGH';
+        } else if (category === 'TRACKING' || category === 'INFO') {
+          conversationPriority = 'LOW';
+        }
+
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            priority: conversationPriority,
+            updatedAt: new Date()
+          }
+        });
+
+        // Autopilot: Send response if eligible
+        if (aiMode === 'AUTOPILOT' && autopilotEligible && triageResult.suggestedReply) {
+          const result = await builderbotAdapter.sendText(fromPhone, triageResult.suggestedReply);
+          
+          if (result.success) {
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                channel: 'WHATSAPP',
+                direction: 'OUTBOUND',
+                text: triageResult.suggestedReply,
+                metadata: { 
+                  autopilot: true, 
+                  messageId: result.messageId,
+                  intent: triageResult.intent,
+                  confidence: triageResult.confidence
+                }
+              }
+            });
+
+            await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: { status: 'PENDING' }
+            });
+          }
+        }
+
+        // Mark event as processed
+        await prisma.eventLog.update({
+          where: { id: eventLog.id },
+          data: { status: 'processed', processedAt: new Date() }
+        });
+
+        const responseTime = Date.now() - startTime;
+        logger.info({ 
+          conversationId: conversation.id, 
+          ticketId: ticket.id,
+          messageId: dbMessage.id,
+          responseTime: `${responseTime}ms`
+        }, '✅ Message processed successfully');
+        
+        return reply.code(200).send({ 
+          status: 'processed', 
+          conversationId: conversation.id, 
+          ticketId: ticket.id,
+          messageId: dbMessage.id
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error({ 
+          error: errorMessage,
+          stack: error instanceof Error ? error.stack : undefined,
+          tenantId,
+          processingTime: Date.now() - startTime
+        }, '❌ Error processing message');
+        
+        if (eventLog) {
+          await prisma.eventLog.update({
+            where: { id: eventLog.id },
+            data: {
+              status: 'failed',
+              error: errorMessage
+            }
+          });
+        }
+        
+        return reply.code(500).send({ 
+          error: 'Internal server error',
+          details: errorMessage
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error({ 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+        tenantId
+      }, '❌ Error processing WhatsApp webhook');
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: errorMessage
+      });
+    }
+  });
+
+  // POST /webhooks/elevenlabs/post-call
+  fastify.post('/webhooks/elevenlabs/post-call', async (request, reply) => {
+    try {
+      const body = request.body as unknown;
+      const validated = ElevenLabsWebhookSchema.parse(body);
+
+      // Resolve tenant
+      const accountKey = (request.headers['x-account-key'] as string) || 'elevenlabs_calls_main';
+      const tenantId = await resolveTenant(accountKey);
+
+      // Idempotency
+      const idempotencyKey = generateIdempotencyKey('elevenlabs_post_call', validated);
+      const existingEvent = await prisma.eventLog.findUnique({
+        where: { idempotencyKey }
+      });
+
+      if (existingEvent && existingEvent.status === 'processed') {
+        return reply.code(200).send({ status: 'already_processed', eventId: existingEvent.id });
+      }
+
+      const eventLog = await prisma.eventLog.upsert({
+        where: { idempotencyKey },
+        update: { retryCount: { increment: 1 } },
+        create: {
+          tenantId,
+          idempotencyKey,
+          source: 'elevenlabs_post_call',
+          type: 'call.completed',
+          rawPayload: JSON.parse(JSON.stringify(validated)),
+          status: 'pending'
+        }
+      });
+
+      try {
+        const phoneNumber = validated.phone_number;
+        const startedAt = new Date(validated.started_at);
+        const endedAt = new Date(validated.ended_at);
+        const duration = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000);
+
+        // Get or create customer
+        const customer = await getOrCreateCustomer(tenantId, phoneNumber);
+
+        // Get or create conversation
+        const conversation = await getOrCreateConversation(
+          tenantId,
+          customer.id,
+          'CALL'
+        );
+
+        // Create call session
+        const callSession = await prisma.callSession.create({
+          data: {
+            conversationId: conversation.id,
+            phoneNumber,
+            startedAt,
+            endedAt,
+            duration,
+            outcome: validated.outcome || 'completed',
+            summary: validated.summary,
+            transcript: validated.transcript,
+            rawPayload: JSON.parse(JSON.stringify(validated))
+          }
+        });
+
+        // Create ticket event
+        const ticket = await prisma.ticket.findFirst({
+          where: { conversationId: conversation.id, status: { not: 'CLOSED' } }
+        });
+
+        if (ticket) {
+          await prisma.ticketEvent.create({
+            data: {
+              ticketId: ticket.id,
+              type: 'call.completed',
+              data: {
+                callId: callSession.id,
+                duration,
+                outcome: validated.outcome,
+                summary: validated.summary
+              }
+            }
+          });
+        }
+
+        // Suggest WhatsApp follow-up
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+        const settings = (tenant?.settings as Record<string, unknown>) || {};
+        const autopilotCallFollowup = (settings.autopilotCallFollowup as boolean) || false;
+
+        if (autopilotCallFollowup && validated.summary) {
+          const followupMessage = `Gracias por tu llamada. Resumen: ${validated.summary}. ¿Hay algo más en lo que podamos ayudarte?`;
+          const result = await builderbotAdapter.sendText(phoneNumber, followupMessage);
+          
+          if (result.success) {
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                channel: 'WHATSAPP',
+                direction: 'OUTBOUND',
+                text: followupMessage,
+                metadata: { callFollowup: true, callId: callSession.id }
+              }
+            });
+          }
+        }
+
+        await prisma.eventLog.update({
+          where: { id: eventLog.id },
+          data: { status: 'processed', processedAt: new Date() }
+        });
+
+        return reply.code(200).send({ status: 'processed', callSessionId: callSession.id });
+      } catch (error) {
+        await prisma.eventLog.update({
+          where: { id: eventLog.id },
+          data: {
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
+        });
+        throw error;
+      }
+    } catch (error) {
+      logger.error(error, 'Error processing ElevenLabs webhook');
+      return reply.code(400).send({ error: 'Invalid payload' });
+    }
+  });
+
+  // Ping endpoint
+  fastify.get('/__ping', async () => {
+    return { ok: true, service: 'api', ts: Date.now() };
+  });
+
+  // Debug endpoints
+  fastify.get('/debug/messages', async (request, reply) => {
+    try {
+      const { limit = '10' } = request.query as { limit?: string };
+      const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
+      
+      const messages = await prisma.message.findMany({
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          conversation: {
+            include: {
+              customer: true
+            }
+          }
+        }
+      });
+      
+      const totalMessages = await prisma.message.count();
+      const totalConversations = await prisma.conversation.count();
+      const totalCustomers = await prisma.customer.count();
+      
+      return {
+        messages,
+        stats: {
+          totalMessages,
+          totalConversations,
+          totalCustomers,
+          recentMessages: messages.length
+        }
+      };
+    } catch (error) {
+      logger.error({ error }, 'Debug messages error');
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  fastify.get('/debug/events', async (request, reply) => {
+    try {
+      const { limit = '20' } = request.query as { limit?: string };
+      const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
+      
+      const events = await prisma.eventLog.findMany({
+        take: limitNum,
+        orderBy: { createdAt: 'desc' },
+        where: {
+          source: 'builderbot_whatsapp'
+        }
+      });
+      
+      const stats = {
+        total: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp' } }),
+        processed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'processed' } }),
+        pending: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'pending' } }),
+        failed: await prisma.eventLog.count({ where: { source: 'builderbot_whatsapp', status: 'failed' } })
+      };
+      
+      return {
+        events,
+        stats
+      };
+    } catch (error) {
+      logger.error({ error }, 'Debug events error');
+      return reply.code(500).send({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // ============================================
+  // END WEBHOOKS
+  // ============================================
 
   // Conversations
   fastify.get('/conversations', async (request, reply) => {
@@ -925,7 +1572,7 @@ async function buildApp() {
 
   // Health check
   fastify.get('/health', async () => {
-    return { status: 'ok', service: 'api' };
+    return { status: 'ok', service: 'api', unified: true };
   });
 
   // Debug endpoint - test password hash
@@ -1034,7 +1681,8 @@ async function start() {
     const port = parseInt(process.env.PORT || '3000', 10);
     const host = process.env.HOST || '0.0.0.0';
     await fastify.listen({ port, host });
-    logger.info(`🚀 API listening on ${host}:${port}`);
+    logger.info(`🚀 API (unified with webhooks) listening on ${host}:${port}`);
+    console.log(`🚀 API (unified with webhooks) listening on ${host}:${port}`);
   } catch (err) {
     logger.error(err);
     process.exit(1);
