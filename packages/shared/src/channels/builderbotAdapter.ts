@@ -43,17 +43,26 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     }
 
     try {
-      // Headers mínimos - Builderbot solo necesita Project ID como token
+      // Builderbot requiere el Project ID como token, pero puede necesitar formato diferente
+      // Probando múltiples formatos basado en el error "Token is missing"
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.projectId}`,
       };
 
-      // Body mínimo - solo lo esencial
+      // Formato 1: Authorization Bearer (estándar)
+      headers['Authorization'] = `Bearer ${this.projectId}`;
+      
+      // Formato 2: X-Project-Id header (algunos APIs lo requieren así)
+      headers['X-Project-Id'] = this.projectId;
+      
+      // Formato 3: Token directo sin Bearer (por si Builderbot no acepta Bearer)
+      headers['X-Token'] = this.projectId;
+
+      // Body - Project ID siempre en el body
       const body: Record<string, unknown> = {
         to: toPhone,
         text,
-        projectId: this.projectId, // Project ID en el body también
+        projectId: this.projectId,
       };
 
       if (opts?.buttons) {
