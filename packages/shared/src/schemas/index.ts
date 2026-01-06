@@ -22,16 +22,19 @@ export const TriageResponseSchema = z.object({
 // Builderbot puede enviar diferentes formatos, así que hacemos el schema más permisivo
 export const WhatsAppWebhookSchema = z.object({
   event: z.string().optional(),
+  eventName: z.string().optional(), // Builderbot custom hook usa eventName
   data: z.object({
     from: z.string(),
     to: z.string().optional(),
+    answer: z.string().optional(), // Builderbot custom hook envía answer directamente
+    body: z.string().optional(), // Algunos formatos usan body directamente
     message: z.object({
       id: z.string().optional(),
       text: z.string().optional(),
       type: z.string().optional(),
       timestamp: z.number().optional(),
       body: z.string().optional() // Algunos proveedores usan 'body' en lugar de 'text'
-    }).passthrough()
+    }).passthrough().optional() // message es opcional si answer/body están en data
   }).passthrough()
 }).passthrough(); // Permitir campos adicionales
 

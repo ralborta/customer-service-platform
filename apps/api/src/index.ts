@@ -614,19 +614,37 @@ async function buildApp() {
         const fromPhone = data.from;
         const message = data.message || {};
         
-        // Extraer texto del mensaje
+        // Extraer texto del mensaje - Builderbot puede enviar en diferentes formatos
         let messageText: string;
-        if (typeof message.text === 'string') {
+        
+        // Formato 1: message.text o message.body (estándar)
+        if (typeof message.text === 'string' && message.text) {
           messageText = message.text;
-        } else if (typeof message.body === 'string') {
+        } else if (typeof message.body === 'string' && message.body) {
           messageText = message.body;
-        } else if (typeof message === 'string') {
+        } 
+        // Formato 2: data.answer (Builderbot custom hook)
+        else if (typeof (data as any).answer === 'string' && (data as any).answer) {
+          messageText = (data as any).answer;
+        }
+        // Formato 3: message como string directo
+        else if (typeof message === 'string' && message) {
           messageText = message;
-        } else {
+        }
+        // Formato 4: data.body directo
+        else if (typeof (data as any).body === 'string' && (data as any).body) {
+          messageText = (data as any).body;
+        }
+        else {
           messageText = '(sin texto)';
         }
         
-        logger.info({ fromPhone, messageText: messageText.substring(0, 100) }, 'Processing WhatsApp message');
+        logger.info({ 
+          fromPhone, 
+          messageText: messageText.substring(0, 100),
+          dataKeys: Object.keys(data),
+          messageKeys: message ? Object.keys(message) : []
+        }, 'Processing WhatsApp message');
 
         // Get or create customer
         const customer = await getOrCreateCustomer(tenantId, fromPhone);
@@ -640,55 +658,84 @@ async function buildApp() {
         );
         logger.info({ conversationId: conversation.id }, '✅ Conversation resolved');
 
+        // Determinar dirección del mensaje
+        const eventName = (validated as any).eventName || validated.event || '';
+        const isOutgoing = eventName.includes('outgoing') || eventName.includes('sent') || eventName === 'message.sent';
+        const direction = isOutgoing ? 'OUTBOUND' : 'INBOUND';
+        
+        logger.info({ 
+          eventName, 
+          direction, 
+          isOutgoing,
+          messageText: messageText.substring(0, 50)
+        }, 'Determining message direction');
+
         // Create message
         const dbMessage = await prisma.message.create({
           data: {
             conversationId: conversation.id,
             channel: 'WHATSAPP',
-            direction: 'INBOUND',
+            direction,
             text: messageText,
             rawPayload: JSON.parse(JSON.stringify(validated))
           }
         });
-        logger.info({ messageId: dbMessage.id }, '✅ Message created in database');
+        logger.info({ messageId: dbMessage.id, direction }, '✅ Message created in database');
 
+        // Solo hacer triage si el mensaje tiene texto (no es solo metadata)
+        // Ignorar mensajes "outgoing" que son respuestas automáticas
+        // (eventName e isOutgoing ya están definidos arriba)
+        
         // Get tenant settings
         const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
         const settings = (tenant?.settings as Record<string, unknown>) || {};
         const aiMode = (settings.aiMode as string) || 'ASSISTED';
         const autopilotCategories = (settings.autopilotCategories as string[]) || [];
 
-        // Call triage DIRECTLY (no HTTP call)
+        // Call triage DIRECTLY (solo para mensajes entrantes, no salientes)
         let triageResult;
-        try {
-          triageResult = await performTriage(
-            conversation.id,
-            dbMessage.id,
-            'whatsapp'
-          );
-          logger.info({ intent: triageResult.intent, confidence: triageResult.confidence }, '✅ Triage completed');
-        } catch (triageError) {
-          logger.warn({ error: triageError }, 'Triage failed, using fallback');
-          // Fallback simple
-          const messageTextLower = messageText.toLowerCase();
-          let intent = 'otro';
-          let confidence = 0.5;
+        if (!isOutgoing && messageText !== '(sin texto)') {
+          try {
+            triageResult = await performTriage(
+              conversation.id,
+              dbMessage.id,
+              'whatsapp'
+            );
+            logger.info({ intent: triageResult.intent, confidence: triageResult.confidence }, '✅ Triage completed');
+          } catch (triageError) {
+            logger.warn({ error: triageError }, 'Triage failed, using fallback');
+            // Fallback simple
+            const messageTextLower = messageText.toLowerCase();
+            let intent = 'otro';
+            let confidence = 0.5;
 
-          if (messageTextLower.includes('seguimiento') || messageTextLower.includes('tracking') || messageTextLower.includes('pedido')) {
-            intent = 'tracking';
-            confidence = 0.8;
-          } else if (messageTextLower.includes('factura') || messageTextLower.includes('deuda') || messageTextLower.includes('pago')) {
-            intent = 'facturacion';
-            confidence = 0.8;
-          } else if (messageTextLower.includes('reclamo') || messageTextLower.includes('problema') || messageTextLower.includes('dañado')) {
-            intent = 'reclamo';
-            confidence = 0.9;
+            if (messageTextLower.includes('seguimiento') || messageTextLower.includes('tracking') || messageTextLower.includes('pedido')) {
+              intent = 'tracking';
+              confidence = 0.8;
+            } else if (messageTextLower.includes('factura') || messageTextLower.includes('deuda') || messageTextLower.includes('pago')) {
+              intent = 'facturacion';
+              confidence = 0.8;
+            } else if (messageTextLower.includes('reclamo') || messageTextLower.includes('problema') || messageTextLower.includes('dañado')) {
+              intent = 'reclamo';
+              confidence = 0.9;
+            }
+
+            triageResult = {
+              intent,
+              confidence,
+              suggestedReply: 'Gracias por contactarnos. Estamos procesando tu consulta.',
+              autopilotEligible: false,
+              suggestedActions: [],
+              missingFields: []
+            };
           }
-
+        } else {
+          // Para mensajes salientes, crear triage básico
+          logger.info('Mensaje saliente detectado, saltando triage');
           triageResult = {
-            intent,
-            confidence,
-            suggestedReply: 'Gracias por contactarnos. Estamos procesando tu consulta.',
+            intent: 'otro',
+            confidence: 0.5,
+            suggestedReply: '',
             autopilotEligible: false,
             suggestedActions: [],
             missingFields: []
