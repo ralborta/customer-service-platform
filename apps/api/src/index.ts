@@ -614,36 +614,58 @@ async function buildApp() {
         const fromPhone = data.from;
         const message = data.message || {};
         
-        // Extraer texto del mensaje - Builderbot puede enviar en diferentes formatos
+        // Determinar tipo de evento
+        const eventName = (validated as any).eventName || validated.event || '';
+        const isOutgoing = eventName.includes('outgoing') || eventName.includes('sent') || eventName === 'message.sent';
+        
+        // Extraer texto del mensaje - Builderbot envía formatos diferentes según el evento
         let messageText: string;
         
-        // Formato 1: message.text o message.body (estándar)
-        if (typeof message.text === 'string' && message.text) {
-          messageText = message.text;
-        } else if (typeof message.body === 'string' && message.body) {
-          messageText = message.body;
-        } 
-        // Formato 2: data.answer (Builderbot custom hook)
-        else if (typeof (data as any).answer === 'string' && (data as any).answer) {
-          messageText = (data as any).answer;
+        // Para mensajes OUTGOING: Builderbot usa data.answer
+        if (isOutgoing) {
+          if (typeof (data as any).answer === 'string' && (data as any).answer) {
+            messageText = (data as any).answer;
+          } else if (typeof (data as any).body === 'string' && (data as any).body) {
+            messageText = (data as any).body;
+          } else {
+            messageText = '(sin texto)';
+          }
         }
-        // Formato 3: message como string directo
-        else if (typeof message === 'string' && message) {
-          messageText = message;
-        }
-        // Formato 4: data.body directo
-        else if (typeof (data as any).body === 'string' && (data as any).body) {
-          messageText = (data as any).body;
-        }
+        // Para mensajes INCOMING: Builderbot usa data.body
         else {
-          messageText = '(sin texto)';
+          // Formato Builderbot: data.body (mensajes entrantes)
+          if (typeof (data as any).body === 'string' && (data as any).body) {
+            messageText = (data as any).body;
+          }
+          // Formato estándar: data.message.text o data.message.body
+          else if (typeof message.text === 'string' && message.text) {
+            messageText = message.text;
+          } else if (typeof message.body === 'string' && message.body) {
+            messageText = message.body;
+          }
+          // Fallback: data.answer (por si acaso)
+          else if (typeof (data as any).answer === 'string' && (data as any).answer) {
+            messageText = (data as any).answer;
+          }
+          // Último recurso
+          else if (typeof message === 'string' && message) {
+            messageText = message;
+          } else {
+            messageText = '(sin texto)';
+          }
         }
         
         logger.info({ 
+          eventName,
+          isOutgoing,
           fromPhone, 
           messageText: messageText.substring(0, 100),
           dataKeys: Object.keys(data),
-          messageKeys: message ? Object.keys(message) : []
+          messageKeys: message ? Object.keys(message) : [],
+          hasDataBody: !!(data as any).body,
+          hasDataAnswer: !!(data as any).answer,
+          hasMessageText: !!message.text,
+          hasMessageBody: !!message.body
         }, 'Processing WhatsApp message');
 
         // Get or create customer
@@ -658,9 +680,7 @@ async function buildApp() {
         );
         logger.info({ conversationId: conversation.id }, '✅ Conversation resolved');
 
-        // Determinar dirección del mensaje
-        const eventName = (validated as any).eventName || validated.event || '';
-        const isOutgoing = eventName.includes('outgoing') || eventName.includes('sent') || eventName === 'message.sent';
+        // Determinar dirección del mensaje (eventName e isOutgoing ya están definidos arriba)
         const direction = isOutgoing ? 'OUTBOUND' : 'INBOUND';
         
         logger.info({ 
@@ -1270,6 +1290,16 @@ async function buildApp() {
     let builderbotMessageId: string | undefined;
     if (messageDirection === 'OUTBOUND' && messageChannel === 'WHATSAPP' && conversation.customer.phoneNumber) {
       try {
+        // Verificar que BUILDERBOT_API_KEY esté configurado
+        const apiKey = process.env.BUILDERBOT_API_KEY;
+        if (!apiKey || apiKey === '') {
+          logger.error('BUILDERBOT_API_KEY no está configurado');
+          return reply.code(500).send({ 
+            error: 'Failed to send message via WhatsApp',
+            details: 'BUILDERBOT_API_KEY no está configurado en las variables de entorno de Railway'
+          });
+        }
+
         const result = await builderbotAdapter.sendText(
           conversation.customer.phoneNumber,
           text,
@@ -1288,12 +1318,12 @@ async function buildApp() {
         } else {
           logger.error({ error: result.error }, 'Failed to send message via Builderbot');
           return reply.code(500).send({ 
-            error: 'Failed to send message via WhatsApp', 
-            details: result.error 
+            error: 'Failed to send message via WhatsApp',
+            details: result.error || 'Unknown error from Builderbot API'
           });
         }
       } catch (error) {
-        logger.error(error, 'Error sending message via Builderbot');
+        logger.error({ error, phoneNumber: conversation.customer.phoneNumber }, 'Error sending message via Builderbot');
         return reply.code(500).send({ 
           error: 'Error sending message via WhatsApp',
           details: error instanceof Error ? error.message : 'Unknown error'
