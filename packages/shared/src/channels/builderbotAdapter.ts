@@ -84,14 +84,24 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
         (body.messages as Record<string, unknown>).buttons = opts.buttons;
       }
 
-      // Logging detallado para debugging
-      console.log('[BUILDERBOT] Enviando mensaje (API v2):', {
-        url,
-        botId: this.botId.substring(0, 20) + '...',
-        hasApiKey: !!this.apiKey,
+      // Logging detallado para debugging - VERSIÓN API v2
+      console.log('========================================');
+      console.log('[BUILDERBOT API v2] NUEVA VERSIÓN - Enviando mensaje');
+      console.log('========================================');
+      console.log('[BUILDERBOT API v2] URL:', url);
+      console.log('[BUILDERBOT API v2] botId:', this.botId.substring(0, 20) + '...');
+      console.log('[BUILDERBOT API v2] hasApiKey:', !!this.apiKey);
+      console.log('[BUILDERBOT API v2] number:', toPhone);
+      console.log('[BUILDERBOT API v2] textLength:', text.length);
+      console.log('[BUILDERBOT API v2] headers:', JSON.stringify({
+        'Content-Type': 'application/json',
+        'x-api-builderbot': this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'MISSING'
+      }));
+      console.log('[BUILDERBOT API v2] body:', JSON.stringify({
+        messages: { content: text.substring(0, 50) + '...' },
         number: toPhone,
-        textLength: text.length,
-      });
+        checkIfExists: false
+      }));
 
       const response = await fetch(url, {
         method: 'POST',
