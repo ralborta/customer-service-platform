@@ -1,4 +1,8 @@
-import type { MessageDirection } from '../types';
+// CÓDIGO EXACTO DEL PROYECTO QUE FUNCIONA (empliados-support-desk)
+// Replicado exactamente para garantizar compatibilidad
+
+const BUILDERBOT_BASE_URL =
+  process.env.BUILDERBOT_BASE_URL || process.env.BUILDERBOT_API_URL || 'https://app.builderbot.cloud';
 
 export interface BuilderbotMessageOptions {
   buttons?: Array<{ id: string; title: string }>;
@@ -19,83 +23,85 @@ export interface BuilderbotAdapter {
 }
 
 class BuilderbotAdapterImpl implements BuilderbotAdapter {
-  private apiUrl: string;
-  private botId: string;
-  private apiKey: string;
-
-  constructor() {
-    // CÓDIGO SIMPLIFICADO - EXACTAMENTE COMO FUNCIONABA
-    this.apiUrl = 'https://app.builderbot.cloud';
-    this.botId = process.env.BUILDERBOT_BOT_ID || '';
-    this.apiKey = process.env.BUILDERBOT_API_KEY || '';
-    
-    console.log('[BUILDERBOT INIT] URL:', this.apiUrl);
-    console.log('[BUILDERBOT INIT] botId configurado:', !!this.botId);
-    console.log('[BUILDERBOT INIT] apiKey configurado:', !!this.apiKey);
-  }
-
   async sendText(
     toPhone: string,
     text: string,
     opts?: BuilderbotMessageOptions
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    if (!this.botId) {
-      return { success: false, error: 'BUILDERBOT_BOT_ID no configurado' };
+    const BOT_ID = process.env.BUILDERBOT_BOT_ID || '';
+    const API_KEY = process.env.BUILDERBOT_API_KEY || '';
+
+    if (!BOT_ID || !API_KEY) {
+      const error = 'BuilderBot no configurado: define BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY';
+      console.error('[BuilderBot]', error);
+      return { success: false, error };
     }
-    if (!this.apiKey) {
-      return { success: false, error: 'BUILDERBOT_API_KEY no configurado' };
+
+    const url = `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages`;
+
+    const body: Record<string, any> = {
+      messages: {
+        content: text,
+      },
+      number: toPhone,
+      checkIfExists: false,
+    };
+
+    if (opts?.metadata && 'mediaUrl' in opts.metadata) {
+      body.messages.mediaUrl = opts.metadata.mediaUrl;
     }
+
+    if (opts?.buttons && opts.buttons.length > 0) {
+      body.messages.buttons = opts.buttons;
+    }
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-builderbot': API_KEY,
+    };
+
+    console.log('[BuilderBot] Enviando mensaje:', {
+      url,
+      number: toPhone,
+      messageLength: text.length,
+      hasMediaUrl: !!(opts?.metadata && 'mediaUrl' in opts.metadata),
+    });
 
     try {
-      // FORMATO EXACTO QUE FUNCIONABA
-      const url = `${this.apiUrl}/api/v2/${this.botId}/messages`;
-      
-      const headers = {
-        'Content-Type': 'application/json',
-        'x-api-builderbot': this.apiKey,
-      };
-
-      const body = {
-        messages: { content: text },
-        number: toPhone,
-        checkIfExists: false,
-      };
-
-      // Agregar mediaUrl si existe
-      if (opts?.metadata && 'mediaUrl' in opts.metadata) {
-        (body.messages as any).mediaUrl = opts.metadata.mediaUrl;
-      }
-
-      // Agregar buttons si existen
-      if (opts?.buttons && opts.buttons.length > 0) {
-        (body.messages as any).buttons = opts.buttons;
-      }
-
-      console.log('[BUILDERBOT] Enviando a:', url);
-      console.log('[BUILDERBOT] Header x-api-builderbot:', this.apiKey.substring(0, 10) + '...');
-      console.log('[BUILDERBOT] Body number:', toPhone);
-
       const response = await fetch(url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       const responseText = await response.text();
-      
+
       if (!response.ok) {
-        console.error('[BUILDERBOT ERROR]', response.status, responseText);
+        console.error('[BuilderBot] ❌ Error al enviar mensaje:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: responseText,
+        });
         return { success: false, error: responseText };
       }
 
-      const data = JSON.parse(responseText);
-      console.log('[BUILDERBOT OK]', data);
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { messageId: responseText };
+      }
+
+      console.log('[BuilderBot] ✅ Mensaje enviado exitosamente');
       return { success: true, messageId: data.messageId || data.id };
-    } catch (error) {
-      console.error('[BUILDERBOT EXCEPTION]', error);
+    } catch (error: any) {
+      console.error('[BuilderBot] ❌ Error al enviar mensaje:', {
+        message: error.message,
+        error: error,
+      });
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
