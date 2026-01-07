@@ -1864,3 +1864,4 @@ async function start() {
 if (require.main === module) {
   start();
 }
+// FORZAR DEPLOY - 20260107-184408
