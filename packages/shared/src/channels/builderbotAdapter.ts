@@ -28,6 +28,10 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     text: string,
     opts?: BuilderbotMessageOptions
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    // LOG MUY VISIBLE PARA CONFIRMAR QUE SE EJECUTA EL CÓDIGO NUEVO
+    console.log('🔥🔥🔥 CÓDIGO NUEVO EJECUTÁNDOSE - VERSIÓN 443c08c 🔥🔥🔥');
+    console.log('🔥🔥🔥 sendText llamado desde la app 🔥🔥🔥');
+    
     // DEBUG: Verificar TODAS las variables de entorno relacionadas
     const BOT_ID = process.env.BUILDERBOT_BOT_ID || '';
     const API_KEY = process.env.BUILDERBOT_API_KEY || '';
