@@ -28,12 +28,23 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     text: string,
     opts?: BuilderbotMessageOptions
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    // DEBUG: Verificar variables de entorno ANTES de usarlas
     const BOT_ID = process.env.BUILDERBOT_BOT_ID || '';
     const API_KEY = process.env.BUILDERBOT_API_KEY || '';
 
+    console.log('[BuilderBot DEBUG] Variables de entorno:', {
+      hasBOT_ID: !!BOT_ID,
+      BOT_ID_length: BOT_ID.length,
+      BOT_ID_preview: BOT_ID ? BOT_ID.substring(0, 10) + '...' : 'EMPTY',
+      hasAPI_KEY: !!API_KEY,
+      API_KEY_length: API_KEY.length,
+      API_KEY_preview: API_KEY ? API_KEY.substring(0, 10) + '...' : 'EMPTY',
+      BUILDERBOT_BASE_URL: BUILDERBOT_BASE_URL,
+    });
+
     if (!BOT_ID || !API_KEY) {
       const error = 'BuilderBot no configurado: define BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY';
-      console.error('[BuilderBot]', error);
+      console.error('[BuilderBot] ❌', error);
       return { success: false, error };
     }
 
@@ -60,12 +71,21 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
       'x-api-builderbot': API_KEY,
     };
 
+    // DEBUG: Log exacto de lo que se envía
     console.log('[BuilderBot] Enviando mensaje:', {
       url,
       number: toPhone,
       messageLength: text.length,
       hasMediaUrl: !!(opts?.metadata && 'mediaUrl' in opts.metadata),
     });
+
+    console.log('[BuilderBot DEBUG] Headers que se envían:', {
+      'Content-Type': headers['Content-Type'],
+      'x-api-builderbot': headers['x-api-builderbot'] ? headers['x-api-builderbot'].substring(0, 15) + '...' : 'MISSING',
+      'x-api-builderbot_length': headers['x-api-builderbot']?.length || 0,
+    });
+
+    console.log('[BuilderBot DEBUG] Body que se envía:', JSON.stringify(body, null, 2));
 
     try {
       const response = await fetch(url, {
@@ -76,11 +96,22 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
 
       const responseText = await response.text();
 
+      // DEBUG: Log de respuesta completa
+      console.log('[BuilderBot DEBUG] Respuesta recibida:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: responseText.substring(0, 500), // Primeros 500 chars
+      });
+
       if (!response.ok) {
         console.error('[BuilderBot] ❌ Error al enviar mensaje:', {
           status: response.status,
           statusText: response.statusText,
           data: responseText,
+          requestUrl: url,
+          requestHeaders: headers,
         });
         return { success: false, error: responseText };
       }
