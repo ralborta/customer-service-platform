@@ -157,7 +157,8 @@ export default function InboxPage() {
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error al enviar mensaje';
-      alert(`Error: ${errorMessage}. Verifica que BUILDERBOT_API_KEY esté configurado.`);
+      // Solo mostrar el error real, no el mensaje genérico
+      alert(`Error: ${errorMessage}`);
     } finally {
       setSending(false);
     }
