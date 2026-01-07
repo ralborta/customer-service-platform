@@ -3,7 +3,7 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "pnpm install --frozen-lockfile && rm -rf node_modules/.cache packages/shared/dist packages/db/dist apps/api/dist && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/db build && pnpm --filter @customer-service/api build"
+buildCommand = "pnpm install --frozen-lockfile && rm -rf packages/shared/dist packages/db/dist apps/api/dist && pnpm --filter @customer-service/shared build && pnpm --filter @customer-service/db build && pnpm --filter @customer-service/api build"
 
 [deploy]
 # Inicializar DB antes de iniciar el servidor
