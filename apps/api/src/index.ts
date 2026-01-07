@@ -1335,7 +1335,14 @@ async function buildApp() {
           builderbotMessageId = result.messageId;
           logger.info({ messageId: result.messageId, phoneNumber: conversation.customer.phoneNumber }, 'Message sent via Builderbot');
         } else {
-          logger.error({ error: result.error }, 'Failed to send message via Builderbot');
+          // DEBUG: Log completo del error
+          logger.error({ 
+            error: result.error,
+            result: result,
+            botId: process.env.BUILDERBOT_BOT_ID ? 'SET' : 'NOT SET',
+            apiKey: process.env.BUILDERBOT_API_KEY ? 'SET' : 'NOT SET',
+            phoneNumber: conversation.customer.phoneNumber
+          }, '❌ Failed to send message via Builderbot - ERROR COMPLETO');
           return reply.code(500).send({ 
             error: 'Failed to send message via WhatsApp',
             details: result.error || 'Unknown error from Builderbot API'
