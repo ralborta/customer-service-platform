@@ -1286,6 +1286,19 @@ async function buildApp() {
     const messageDirection = direction || 'OUTBOUND';
     const messageChannel = channel || conversation.primaryChannel;
 
+    // DEBUG: Verificar valores exactos
+    logger.info({
+      messageDirection,
+      messageChannel,
+      primaryChannel: conversation.primaryChannel,
+      channelFromRequest: channel,
+      phoneNumber: conversation.customer.phoneNumber,
+      condition1: messageDirection === 'OUTBOUND',
+      condition2: messageChannel === 'WHATSAPP',
+      condition3: !!conversation.customer.phoneNumber,
+      willSendViaBuilderbot: messageDirection === 'OUTBOUND' && messageChannel === 'WHATSAPP' && !!conversation.customer.phoneNumber
+    }, '🔍 DEBUG: Verificando condiciones para enviar por Builderbot');
+
     // Si es mensaje OUTBOUND y el canal es WhatsApp, enviar por Builderbot
     let builderbotMessageId: string | undefined;
     if (messageDirection === 'OUTBOUND' && messageChannel === 'WHATSAPP' && conversation.customer.phoneNumber) {
