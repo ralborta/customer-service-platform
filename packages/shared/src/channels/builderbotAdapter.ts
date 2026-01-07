@@ -73,6 +73,15 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
 
     const url = `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages`;
 
+    // DEBUG CRÍTICO: Log de la URL EXACTA que se está usando
+    console.log('🔴🔴🔴 URL EXACTA QUE SE ESTÁ USANDO 🔴🔴🔴');
+    console.log('URL completa:', url);
+    console.log('BUILDERBOT_BASE_URL:', BUILDERBOT_BASE_URL);
+    console.log('BOT_ID usado en URL:', BOT_ID);
+    console.log('BOT_ID length:', BOT_ID.length);
+    console.log('URL construida:', `${BUILDERBOT_BASE_URL}/api/v2/${BOT_ID}/messages`);
+    console.log('🔴🔴🔴 FIN URL EXACTA 🔴🔴🔴');
+
     const body: Record<string, any> = {
       messages: {
         content: text,
