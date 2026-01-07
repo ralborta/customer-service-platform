@@ -28,19 +28,38 @@ class BuilderbotAdapterImpl implements BuilderbotAdapter {
     text: string,
     opts?: BuilderbotMessageOptions
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    // DEBUG: Verificar variables de entorno ANTES de usarlas
+    // DEBUG: Verificar TODAS las variables de entorno relacionadas
     const BOT_ID = process.env.BUILDERBOT_BOT_ID || '';
     const API_KEY = process.env.BUILDERBOT_API_KEY || '';
+    
+    // Verificar si hay variables internas que puedan estar interfiriendo
+    const INTERNAL_API_KEY = process.env.INTERNAL_API_TOKEN || '';
+    const INTERNAL_API_URL = process.env.INTERNAL_API_URL || '';
 
-    console.log('[BuilderBot DEBUG] Variables de entorno:', {
+    console.log('========================================');
+    console.log('[BuilderBot DEBUG] 🔍 ANÁLISIS COMPLETO DE VARIABLES');
+    console.log('========================================');
+    console.log('[BuilderBot DEBUG] Variables de Builderbot:', {
       hasBOT_ID: !!BOT_ID,
       BOT_ID_length: BOT_ID.length,
-      BOT_ID_preview: BOT_ID ? BOT_ID.substring(0, 10) + '...' : 'EMPTY',
+      BOT_ID_preview: BOT_ID ? BOT_ID.substring(0, 15) + '...' : '❌ EMPTY',
       hasAPI_KEY: !!API_KEY,
       API_KEY_length: API_KEY.length,
-      API_KEY_preview: API_KEY ? API_KEY.substring(0, 10) + '...' : 'EMPTY',
+      API_KEY_preview: API_KEY ? API_KEY.substring(0, 15) + '...' : '❌ EMPTY',
       BUILDERBOT_BASE_URL: BUILDERBOT_BASE_URL,
     });
+    console.log('[BuilderBot DEBUG] Variables internas (NO DEBERÍAN USARSE):', {
+      hasINTERNAL_API_KEY: !!INTERNAL_API_KEY,
+      hasINTERNAL_API_URL: !!INTERNAL_API_URL,
+      INTERNAL_API_URL: INTERNAL_API_URL,
+    });
+    console.log('[BuilderBot DEBUG] Todas las variables BUILDERBOT en process.env:', {
+      BUILDERBOT_BOT_ID: process.env.BUILDERBOT_BOT_ID ? '✅ SET' : '❌ NOT SET',
+      BUILDERBOT_API_KEY: process.env.BUILDERBOT_API_KEY ? '✅ SET' : '❌ NOT SET',
+      BUILDERBOT_BASE_URL: process.env.BUILDERBOT_BASE_URL || 'NOT SET',
+      BUILDERBOT_API_URL: process.env.BUILDERBOT_API_URL || 'NOT SET',
+    });
+    console.log('========================================');
 
     if (!BOT_ID || !API_KEY) {
       const error = 'BuilderBot no configurado: define BUILDERBOT_BOT_ID y BUILDERBOT_API_KEY';
