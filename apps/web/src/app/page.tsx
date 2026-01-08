@@ -10,7 +10,8 @@ import {
   TrendingUp, Camera, Truck, Send,
   Mic, MessageSquare, ArrowRight,
   AlertCircle, CheckCircle2, XCircle, ChevronDown,
-  Info, Plus, ArrowDown, Phone, Play, Circle, Square, Sun, Pen, Ruler
+  Info, Plus, ArrowDown, Phone, Play, Circle, Square, Sun, Pen, Ruler,
+  AlertTriangle, HelpCircle, DollarSign, FileSearch
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -42,6 +43,7 @@ interface DashboardStats {
 
 interface UrgentWorkItem {
   id: string;
+  conversationId: string;
   customer: string;
   phoneNumber: string;
   reason: string;
@@ -51,6 +53,9 @@ interface UrgentWorkItem {
   slaStatus: 'ok' | 'risk' | 'overdue';
   channel: string;
   avatarInitials: string;
+  type: 'RECLAMO' | 'INFO' | 'TRACKING' | 'FACTURACION' | 'COTIZACION' | 'OTRO';
+  lastMessage?: string;
+  assignedTo?: string | null;
 }
 
 interface InsightItem {
@@ -83,26 +88,70 @@ export default function DashboardPage() {
       const openTickets = ticketsData.filter(t => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length;
       const inRiskTickets = 5;
       
-      const urgentList = ticketsData
-        .filter(t => t.priority === 'URGENT' && (t.status === 'OPEN' || t.status === 'IN_PROGRESS'))
+      // Cargar conversaciones de WhatsApp con sus tickets asociados
+      const conversationsWithTickets = await Promise.all(
+        conversationsData
+          .filter(c => c.primaryChannel === 'WHATSAPP' && (c.status === 'OPEN' || c.status === 'PENDING'))
+          .slice(0, 20)
+          .map(async (conv) => {
+            // Obtener ticket asociado si existe
+            const ticket = ticketsData.find(t => t.conversationId === conv.id);
+            
+            // Determinar tipo basado en ticket o último mensaje
+            let type: 'RECLAMO' | 'INFO' | 'TRACKING' | 'FACTURACION' | 'COTIZACION' | 'OTRO' = 'OTRO';
+            if (ticket?.category) {
+              type = ticket.category as any;
+            } else if (conv.messages && conv.messages.length > 0) {
+              // Intentar obtener tipo del metadata del último mensaje
+              try {
+                const fullConv = await apiRequest(`/conversations/${conv.id}`);
+                const lastMessage = fullConv.messages?.[fullConv.messages.length - 1];
+                if (lastMessage?.metadata?.intent) {
+                  const intent = lastMessage.metadata.intent.toUpperCase();
+                  if (['RECLAMO', 'INFO', 'TRACKING', 'FACTURACION', 'COTIZACION', 'OTRO'].includes(intent)) {
+                    type = intent as any;
+                  }
+                }
+              } catch (e) {
+                // Si falla, usar OTRO
+              }
+            }
+            
+            const customerName = conv.customer?.name || `Cliente ${conv.customer?.phoneNumber || 'Sin teléfono'}`;
+            const initials = customerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+            const lastMessageText = conv.messages?.[0]?.text || '';
+            
+            return {
+              id: ticket?.id || conv.id,
+              conversationId: conv.id,
+              customer: customerName,
+              phoneNumber: conv.customer?.phoneNumber || '',
+              reason: ticket?.category || type || 'General',
+              waiting: getWaitingTime(conv.updatedAt),
+              sla: calculateSLA(conv.updatedAt),
+              slaBadge: '', // Se calculará después
+              slaStatus: (ticket?.priority === 'URGENT' || ticket?.priority === 'HIGH') ? 'risk' as const : 'ok' as const,
+              channel: conv.primaryChannel || 'WHATSAPP',
+              avatarInitials: initials,
+              type: type,
+              lastMessage: lastMessageText.substring(0, 50),
+              assignedTo: conv.assignedTo?.name || ticket?.assignedTo?.name || null
+            };
+          })
+      );
+      
+      // Ordenar por prioridad (URGENT primero, luego por fecha)
+      const urgentList = conversationsWithTickets
+        .sort((a, b) => {
+          if (a.slaStatus === 'risk' && b.slaStatus !== 'risk') return -1;
+          if (a.slaStatus !== 'risk' && b.slaStatus === 'risk') return 1;
+          return new Date(b.waiting).getTime() - new Date(a.waiting).getTime();
+        })
         .slice(0, 10)
-        .map((t, idx) => {
-          const customerName = t.customer?.name || `Cliente ${t.customer?.phoneNumber || 'Sin teléfono'}`;
-          const initials = customerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-          
-          return {
-            id: t.id,
-            customer: customerName,
-            phoneNumber: t.customer?.phoneNumber || '',
-            reason: t.category || 'General',
-            waiting: getWaitingTime(t.createdAt),
-            sla: calculateSLA(t.createdAt),
-            slaBadge: idx === 0 ? '-1' : idx === 1 ? '-15s' : idx === 2 ? '+0s' : 'Ok',
-            slaStatus: idx < 2 ? 'risk' as const : 'ok' as const,
-            channel: t.channel || 'WHATSAPP',
-            avatarInitials: initials
-          };
-        });
+        .map((item, idx) => ({
+          ...item,
+          slaBadge: idx === 0 ? '-1' : idx === 1 ? '-15s' : idx === 2 ? '+0s' : 'Ok'
+        }));
 
       setStats({
         tickets: {
@@ -164,6 +213,57 @@ export default function DashboardPage() {
     const colors = ['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500'];
     const index = initials.charCodeAt(0) % colors.length;
     return colors[index];
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'RECLAMO':
+        return <AlertTriangle className="w-4 h-4 text-red-600" />;
+      case 'INFO':
+        return <Info className="w-4 h-4 text-blue-600" />;
+      case 'TRACKING':
+        return <Truck className="w-4 h-4 text-green-600" />;
+      case 'FACTURACION':
+        return <DollarSign className="w-4 h-4 text-yellow-600" />;
+      case 'COTIZACION':
+        return <FileSearch className="w-4 h-4 text-purple-600" />;
+      default:
+        return <HelpCircle className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'RECLAMO':
+        return 'Reclamo';
+      case 'INFO':
+        return 'Información';
+      case 'TRACKING':
+        return 'Track & Trace';
+      case 'FACTURACION':
+        return 'Facturación';
+      case 'COTIZACION':
+        return 'Cotización';
+      default:
+        return 'Otro';
+    }
+  };
+
+  const getTypeBadgeColor = (type: string) => {
+    switch (type) {
+      case 'RECLAMO':
+        return 'bg-red-100 text-red-800 border-red-200';
+      case 'INFO':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'TRACKING':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'FACTURACION':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'COTIZACION':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
   };
 
   if (loading) {
@@ -391,9 +491,22 @@ export default function DashboardPage() {
                                 <div className={`w-8 h-8 rounded-full ${getAvatarColor(item.avatarInitials)} flex items-center justify-center text-white font-semibold text-xs flex-shrink-0`}>
                                   {item.avatarInitials}
                                 </div>
-                                <div>
-                                  <div className="font-medium text-sm text-gray-900">{item.customer}</div>
-                                  <div className="text-xs text-gray-500 truncate max-w-[200px]">{item.reason}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="font-medium text-sm text-gray-900 truncate">{item.customer}</div>
+                                    <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border flex items-center gap-1 ${getTypeBadgeColor(item.type)}`}>
+                                      {getTypeIcon(item.type)}
+                                      {getTypeLabel(item.type)}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-500 truncate max-w-[200px]">
+                                    {item.lastMessage || item.reason}
+                                  </div>
+                                  {item.assignedTo && (
+                                    <div className="text-[10px] text-gray-400 mt-0.5">
+                                      Asignado a: {item.assignedTo}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>
