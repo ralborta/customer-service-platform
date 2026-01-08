@@ -46,6 +46,15 @@ export default function InboxPage() {
   }, []);
 
   useEffect(() => {
+    // Check for conversation ID in URL params
+    const params = new URLSearchParams(window.location.search);
+    const conversationId = params.get('conversation');
+    if (conversationId && !selectedConversation) {
+      loadFullConversation(conversationId);
+    }
+  }, []);
+
+  useEffect(() => {
     if (selectedConversation) {
       loadFullConversation(selectedConversation.id);
     }

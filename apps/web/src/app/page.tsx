@@ -199,8 +199,14 @@ export default function DashboardPage() {
   function getWaitingTime(dateString: string): string {
     const date = new Date(dateString);
     const now = new Date();
-    const diffHours = Math.floor((now.getTime() - date.getTime()) / 3600000);
-    return `${diffHours} h`;
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffDays > 0) return `${diffDays} d`;
+    if (diffHours > 0) return `${diffHours} h`;
+    const diffMins = Math.floor(diffMs / 60000);
+    return `${diffMins} m`;
   }
 
   function calculateSLA(dateString: string): string {
