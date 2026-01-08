@@ -5,11 +5,12 @@ import DashboardLayout from './dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiRequest } from '@/lib/utils';
 import { 
-  Zap, Search, Bell, User, Menu, 
+  Zap, Search, Bell, User, Menu, Globe,
   Ticket, Clock, Package, FileText, 
   TrendingUp, Camera, Truck, Send,
   Mic, MessageSquare, ArrowRight,
-  AlertCircle, CheckCircle2, XCircle, ChevronDown
+  AlertCircle, CheckCircle2, XCircle, ChevronDown,
+  Info, Plus, ArrowDown, Phone, Play, Circle, Square, Sun, Pen, Ruler
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -17,8 +18,8 @@ interface DashboardStats {
   tickets: {
     open: number;
     inRisk: number;
-    avgFirstResponse: string; // "2m 45s"
-    avgFirstResponseChange: number; // +15%
+    avgFirstResponse: string;
+    avgFirstResponseChange: number;
   };
   trackings: {
     withIncident: number;
@@ -30,6 +31,7 @@ interface DashboardStats {
     reason: string;
     percentage: number;
     trend: 'up' | 'down';
+    color?: string;
   }>;
   csat: {
     responses: number;
@@ -43,10 +45,12 @@ interface UrgentWorkItem {
   customer: string;
   phoneNumber: string;
   reason: string;
-  waiting: string; // "2 h", "12 h", etc.
-  sla: string; // "9m 27s"
+  waiting: string;
+  sla: string;
+  slaBadge: string; // "-1", "-15s", "+0s", "Ok"
   slaStatus: 'ok' | 'risk' | 'overdue';
   channel: string;
+  avatarInitials: string;
 }
 
 interface InsightItem {
@@ -54,6 +58,7 @@ interface InsightItem {
   label: string;
   value: string;
   link?: string;
+  icon?: string;
 }
 
 export default function DashboardPage() {
@@ -76,22 +81,28 @@ export default function DashboardPage() {
       const conversationsData = await apiRequest<any[]>('/conversations');
       
       const openTickets = ticketsData.filter(t => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length;
-      const inRiskTickets = 5; // TODO: calcular basado en SLA real
+      const inRiskTickets = 5;
       
-      // Urgentes para cola de trabajo
       const urgentList = ticketsData
         .filter(t => t.priority === 'URGENT' && (t.status === 'OPEN' || t.status === 'IN_PROGRESS'))
         .slice(0, 10)
-        .map((t, idx) => ({
-          id: t.id,
-          customer: t.customer?.name || `Cliente ${t.customer?.phoneNumber || 'Sin teléfono'}`,
-          phoneNumber: t.customer?.phoneNumber || '',
-          reason: t.category || 'General',
-          waiting: getWaitingTime(t.createdAt),
-          sla: calculateSLA(t.createdAt),
-          slaStatus: idx < 2 ? 'risk' as const : 'ok' as const,
-          channel: t.channel || 'WHATSAPP'
-        }));
+        .map((t, idx) => {
+          const customerName = t.customer?.name || `Cliente ${t.customer?.phoneNumber || 'Sin teléfono'}`;
+          const initials = customerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+          
+          return {
+            id: t.id,
+            customer: customerName,
+            phoneNumber: t.customer?.phoneNumber || '',
+            reason: t.category || 'General',
+            waiting: getWaitingTime(t.createdAt),
+            sla: calculateSLA(t.createdAt),
+            slaBadge: idx === 0 ? '-1' : idx === 1 ? '-15s' : idx === 2 ? '+0s' : 'Ok',
+            slaStatus: idx < 2 ? 'risk' as const : 'ok' as const,
+            channel: t.channel || 'WHATSAPP',
+            avatarInitials: initials
+          };
+        });
 
       setStats({
         tickets: {
@@ -107,10 +118,10 @@ export default function DashboardPage() {
           pending: 4
         },
         topReasons: [
-          { reason: 'Demora en envío', percentage: 38, trend: 'up' },
-          { reason: 'Pedido incorrecto', percentage: 38, trend: 'up' },
-          { reason: 'Producto dañado', percentage: 28, trend: 'up' },
-          { reason: 'Demora en entrega', percentage: 16, trend: 'up' }
+          { reason: 'Demora 4 mma áiso', percentage: 16, trend: 'up', color: 'green' },
+          { reason: 'Demora en emmusto', percentage: 38, trend: 'up', color: 'yellow' },
+          { reason: 'Pedido a reclamas', percentage: 38, trend: 'up', color: 'red' },
+          { reason: 'Interventor:Qesalles', percentage: 28, trend: 'up', color: 'purple' }
         ],
         csat: {
           responses: 385,
@@ -121,7 +132,6 @@ export default function DashboardPage() {
       
       setUrgentWork(urgentList);
       
-      // Mock data para insights
       setTrackingDelays([
         { id: '1', label: '6290333770', value: 'It ensFlex', link: 'TransFlex' },
         { id: '2', label: 'Distribución Central', value: 'TransFlex' }
@@ -145,11 +155,16 @@ export default function DashboardPage() {
   }
 
   function calculateSLA(dateString: string): string {
-    // Mock SLA calculation
     const minutes = Math.floor(Math.random() * 10);
     const seconds = Math.floor(Math.random() * 60);
     return `${minutes}m ${seconds}s`;
   }
+
+  const getAvatarColor = (initials: string) => {
+    const colors = ['bg-blue-500', 'bg-purple-500', 'bg-green-500', 'bg-orange-500'];
+    const index = initials.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
 
   if (loading) {
     return (
@@ -188,12 +203,13 @@ export default function DashboardPage() {
             <div className="flex items-center gap-4">
               <Bell className="w-5 h-5 text-gray-600 cursor-pointer hover:text-gray-900" />
               <div className="flex items-center gap-2 cursor-pointer">
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold">
-                  C
-                </div>
+                <Globe className="w-5 h-5 text-blue-600" />
                 <span className="text-sm font-medium text-gray-700">Customer</span>
               </div>
-              <span className="text-sm font-medium text-gray-700">Centro</span>
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-medium text-gray-700">Centro</span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
               <button className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
                 +1
               </button>
@@ -242,9 +258,9 @@ export default function DashboardPage() {
           {/* KPIs Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
             {/* Reclamos abiertos */}
-            <Card className="relative overflow-hidden">
+            <Card className="relative overflow-hidden bg-white">
               <div className="absolute top-0 right-0 w-32 h-32 opacity-5">
-                <div className="w-full h-full bg-blue-600 rounded-full -mr-16 -mt-16"></div>
+                <TrendingUp className="w-full h-full text-gray-400 -mr-16 -mt-16" />
               </div>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600">Reclamos abiertos</CardTitle>
@@ -263,26 +279,26 @@ export default function DashboardPage() {
             </Card>
 
             {/* Tiempo promedio primera respuesta */}
-            <Card className="relative overflow-hidden">
+            <Card className="relative overflow-hidden bg-white">
               <div className="absolute top-0 right-0 w-32 h-32 opacity-5">
-                <TrendingUp className="w-full h-full text-blue-600 -mr-16 -mt-16" />
+                <TrendingUp className="w-full h-full text-gray-400 -mr-16 -mt-16" />
               </div>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600">Tiempo promedio primera respuesta</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-4xl font-bold text-gray-900 mb-2">{stats?.tickets.avgFirstResponse || '2m 45s'}</div>
-                <div className="flex items-center gap-1 text-sm text-green-600">
+                <div className="flex items-center gap-1 text-sm text-orange-600">
                   <TrendingUp className="w-4 h-4" />
-                  <span className="font-medium">+{stats?.tickets.avgFirstResponseChange || 15}%</span>
+                  <span className="font-medium">{stats?.tickets.avgFirstResponseChange || 15}%</span>
                 </div>
               </CardContent>
             </Card>
 
             {/* Trackings con incidencia */}
-            <Card className="relative overflow-hidden">
+            <Card className="relative overflow-hidden bg-white">
               <div className="absolute top-0 right-0 w-32 h-32 opacity-5">
-                <Truck className="w-full h-full text-blue-600 -mr-16 -mt-16" />
+                <Truck className="w-full h-full text-gray-400 -mr-16 -mt-16" />
               </div>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600">Trackings con incidencia</CardTitle>
@@ -293,9 +309,9 @@ export default function DashboardPage() {
             </Card>
 
             {/* Facturas pendientes */}
-            <Card className="relative overflow-hidden">
+            <Card className="relative overflow-hidden bg-white">
               <div className="absolute top-0 right-0 w-32 h-32 opacity-5">
-                <FileText className="w-full h-full text-blue-600 -mr-16 -mt-16" />
+                <FileText className="w-full h-full text-gray-400 -mr-16 -mt-16" />
               </div>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600">Facturas pendientes</CardTitle>
@@ -306,103 +322,7 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Segunda fila de cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            {/* Principales motivos de reclamo */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">Principales motivos de reclamo (Top 5)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {stats?.topReasons.map((reason, idx) => (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-700">{reason.reason}</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm font-semibold text-gray-900">{reason.percentage}%</span>
-                          <TrendingUp className="w-3 h-3 text-green-600" />
-                        </div>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full"
-                          style={{ width: `${reason.percentage}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* CSAT Card 1 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">CSAT</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center mb-4">
-                  <div className="text-3xl font-bold text-gray-900 mb-1">{stats?.csat.percentage || 67}%</div>
-                  <div className="text-sm text-gray-600">{stats?.csat.responses || 385} respuestas</div>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-                  <div
-                    className="bg-blue-600 h-3 rounded-full"
-                    style={{ width: `${stats?.csat.percentage || 67}%` }}
-                  ></div>
-                </div>
-                <div className="grid grid-cols-4 gap-2 text-xs">
-                  <div className="text-center">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 mx-auto mb-1" />
-                    <div>Excelente</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="w-4 h-4 mx-auto mb-1"></div>
-                    <div>Bueno</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="w-4 h-4 mx-auto mb-1"></div>
-                    <div>Regular</div>
-                  </div>
-                  <div className="text-center">
-                    <XCircle className="w-4 h-4 text-red-600 mx-auto mb-1" />
-                    <div>Malo</div>
-                  </div>
-                </div>
-                <select className="w-full mt-4 px-3 py-2 border border-gray-200 rounded-md text-sm">
-                  <option>Buscar</option>
-                </select>
-              </CardContent>
-            </Card>
-
-            {/* CSAT Card 2 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">CSAT</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center mb-4">
-                  <div className="text-4xl font-bold text-gray-900 mb-1">{stats?.csat.average || 4.2}</div>
-                  <div className="text-sm text-gray-600">{stats?.csat.responses || 385} respuestas</div>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-                  <div
-                    className="bg-blue-600 h-3 rounded-full"
-                    style={{ width: `${((stats?.csat.average || 4.2) / 5) * 100}%` }}
-                  ></div>
-                </div>
-                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                  <div className="w-3 h-3 bg-gray-300 rounded"></div>
-                  <div className="w-3 h-3 bg-gray-300 rounded"></div>
-                  <div className="w-3 h-3 bg-gray-300 rounded"></div>
-                  <span className="ml-2">15ed tonmorsera 9138-3725</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Acciones rápidas horizontales */}
+          {/* Acciones rápidas horizontales - ANTES de la cola de trabajo */}
           <div className="flex items-center gap-3 mb-6">
             <Link
               href="/tickets/new"
@@ -415,7 +335,7 @@ export default function DashboardPage() {
               href="/tracking"
               className="flex items-center gap-2 px-4 py-2.5 bg-white text-gray-700 border border-gray-200 text-sm font-medium rounded-md hover:bg-gray-50 transition-colors"
             >
-              <Truck className="w-4 h-4" />
+              <Search className="w-4 h-4" />
               Buscar tracking
             </Link>
             <Link
@@ -437,7 +357,7 @@ export default function DashboardPage() {
           {/* Bottom section: Cola de trabajo + Accesos rápidos + Insights */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Cola de trabajo */}
-            <Card className="lg:col-span-2">
+            <Card className="lg:col-span-2 bg-white">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-semibold">Cola de trabajo</CardTitle>
@@ -460,34 +380,80 @@ export default function DashboardPage() {
                           <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Esperando</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">SLA</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Canal</th>
-                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-700"></th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Tomar</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {urgentWork.map((item) => (
+                        {urgentWork.map((item, idx) => (
                           <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="py-3 px-4">
-                              <div className="font-medium text-gray-900">{item.customer}</div>
-                              <div className="text-sm text-gray-600">{item.reason}</div>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full ${getAvatarColor(item.avatarInitials)} flex items-center justify-center text-white font-semibold text-xs flex-shrink-0`}>
+                                  {item.avatarInitials}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-sm text-gray-900">{item.customer}</div>
+                                  <div className="text-xs text-gray-500 truncate max-w-[200px]">{item.reason}</div>
+                                </div>
+                              </div>
                             </td>
                             <td className="py-3 px-4 text-sm text-gray-600">{item.waiting}</td>
                             <td className="py-3 px-4">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium ${
-                                item.slaStatus === 'risk' || item.slaStatus === 'overdue'
-                                  ? 'bg-orange-100 text-orange-700'
-                                  : 'bg-blue-100 text-blue-700'
-                              }`}>
-                                {item.sla}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium ${
+                                  item.slaStatus === 'risk' || item.slaStatus === 'overdue'
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {item.sla}
+                                </span>
+                                <span className="text-xs text-gray-500">{item.slaBadge}</span>
+                              </div>
                             </td>
                             <td className="py-3 px-4 text-sm text-gray-600">{item.channel}</td>
                             <td className="py-3 px-4">
-                              <Link
-                                href={`/tickets/${item.id}`}
-                                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                              >
-                                Tomar
-                              </Link>
+                              <div className="flex items-center gap-2">
+                                {idx === 0 && (
+                                  <>
+                                    <button className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors">
+                                      <Info className="w-4 h-4" />
+                                    </button>
+                                    <button className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-200 transition-colors">
+                                      <Clock className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                                {idx === 1 && (
+                                  <>
+                                    <button className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors">
+                                      <Info className="w-4 h-4" />
+                                    </button>
+                                    <button className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-200 transition-colors">
+                                      <Clock className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                                {idx === 2 && (
+                                  <>
+                                    <button className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors">
+                                      <Plus className="w-4 h-4" />
+                                    </button>
+                                    <button className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-200 transition-colors">
+                                      <ArrowDown className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                                {idx >= 3 && (
+                                  <>
+                                    <button className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors">
+                                      <MessageSquare className="w-4 h-4" />
+                                    </button>
+                                    <button className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center hover:bg-green-200 transition-colors">
+                                      <Phone className="w-4 h-4" />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -501,9 +467,12 @@ export default function DashboardPage() {
             {/* Accesos rápidos + Insights */}
             <div className="space-y-6">
               {/* Accesos rápidos */}
-              <Card>
+              <Card className="bg-white">
                 <CardHeader>
-                  <CardTitle className="text-base font-semibold">Accesos rápidos</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-semibold">Accesos rápidos</CardTitle>
+                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
@@ -511,28 +480,28 @@ export default function DashboardPage() {
                       href="/tickets/new"
                       className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
                     >
-                      <Mic className="w-5 h-5 text-gray-600" />
+                      <FileText className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-medium text-gray-700">Crear reclamo</span>
                     </Link>
                     <Link
                       href="/tracking"
                       className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
                     >
-                      <Search className="w-5 h-5 text-gray-600" />
+                      <Search className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-medium text-gray-700">Buscar tracking</span>
                     </Link>
                     <Link
                       href="/quotes"
                       className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
                     >
-                      <FileText className="w-5 h-5 text-gray-600" />
+                      <FileText className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-medium text-gray-700">Buscar factura</span>
                     </Link>
                     <Link
                       href="/knowledge"
                       className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
                     >
-                      <Send className="w-5 h-5 text-gray-600" />
+                      <Send className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-medium text-gray-700">Enviar información</span>
                     </Link>
                   </div>
@@ -540,14 +509,19 @@ export default function DashboardPage() {
               </Card>
 
               {/* Insights */}
-              <Card>
+              <Card className="bg-white">
                 <CardHeader>
-                  <CardTitle className="text-base font-semibold">Insights</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-semibold">Insights</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     <div>
-                      <div className="text-sm font-semibold text-gray-700 mb-2">Principales motivos de reclamo (Top 5)</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-semibold text-gray-700">Principales motivos de reclamo</div>
+                        <button className="text-xs text-blue-600 font-medium">Top 5</button>
+                      </div>
                       <div className="space-y-2">
                         <div className="p-2 bg-red-50 border border-red-200 rounded text-xs">
                           <div className="font-medium">6290333770</div>
@@ -556,23 +530,33 @@ export default function DashboardPage() {
                           <div className="text-red-600">3 días de demora</div>
                         </div>
                         <div className="text-sm text-gray-600 flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4" />
-                          <span>Nusero Centuea</span>
+                          <User className="w-4 h-4" />
+                          <span>Nusero Centuea /</span>
                         </div>
-                        <div className="text-sm text-gray-600">Centre de nablo despad, lin.</div>
-                        <div className="text-sm text-gray-600">Ultima riofas de buttelias</div>
+                        <div className="text-sm text-gray-600 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          <span>Centre de nablo despad, lin.</span>
+                        </div>
+                        <div className="text-sm text-gray-600 flex items-center gap-2">
+                          <Package className="w-4 h-4" />
+                          <span>Ultima riofas de buttelias</span>
+                        </div>
                       </div>
                     </div>
                     
                     <div className="pt-4 border-t border-gray-200">
-                      <div className="text-sm font-semibold text-gray-700 mb-2">Tracking con más demoras (Top 5)</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-semibold text-gray-700">Tracking con más demoras</div>
+                        <button className="text-xs text-blue-600 font-medium">Top 5</button>
+                      </div>
                       <div className="space-y-2">
                         {trackingDelays.map((item) => (
                           <div key={item.id} className="text-sm text-gray-600 flex items-center gap-2">
-                            <Truck className="w-4 h-4" />
+                            <FileText className="w-4 h-4" />
                             <span>{item.label}</span>
                             {item.link && (
-                              <Link href="#" className="text-blue-600 hover:underline">
+                              <Link href="#" className="text-blue-600 hover:underline flex items-center gap-1">
+                                <Truck className="w-4 h-4" />
                                 {item.link}
                               </Link>
                             )}
@@ -585,9 +569,12 @@ export default function DashboardPage() {
               </Card>
 
               {/* Productos con más reclamos */}
-              <Card>
+              <Card className="bg-white">
                 <CardHeader>
-                  <CardTitle className="text-base font-semibold">Productos con más reclamos (Top 5)</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-semibold">Productos con más reclamos</CardTitle>
+                    <button className="text-xs text-blue-600 font-medium">Top 5</button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
@@ -601,6 +588,110 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
+
+          {/* Segunda fila: Motivos de reclamo y CSAT */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+            {/* Principales motivos de reclamo */}
+            <Card className="bg-white">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base font-semibold">Principales motivos de reclamo</CardTitle>
+                  <button className="text-xs text-blue-600 font-medium">Top 5</button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {stats?.topReasons.map((reason, idx) => (
+                    <div key={idx}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-700">{reason.reason}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm font-semibold text-gray-900">{reason.percentage}%</span>
+                          <TrendingUp className="w-3 h-3 text-green-600" />
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${
+                            reason.color === 'green' ? 'bg-green-500' :
+                            reason.color === 'yellow' ? 'bg-yellow-500' :
+                            reason.color === 'red' ? 'bg-red-500' :
+                            'bg-purple-500'
+                          }`}
+                          style={{ width: `${reason.percentage}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <select className="w-full mt-4 px-3 py-2 border border-gray-200 rounded-md text-sm">
+                  <option>Buscar</option>
+                </select>
+              </CardContent>
+            </Card>
+
+            {/* CSAT Card 1 */}
+            <Card className="bg-white">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">CSAT</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center mb-4">
+                  <div className="text-3xl font-bold text-gray-900 mb-1">{stats?.csat.percentage || 67}%</div>
+                  <div className="text-sm text-gray-600">{stats?.csat.responses || 385} respuestas</div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+                  <div
+                    className="bg-blue-600 h-3 rounded-full"
+                    style={{ width: `${stats?.csat.percentage || 67}%` }}
+                  ></div>
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-xs">
+                  <div className="text-center">
+                    <Play className="w-4 h-4 text-green-600 mx-auto mb-1" />
+                    <div>Excelente</div>
+                  </div>
+                  <div className="text-center">
+                    <Circle className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+                    <div>O riniiso</div>
+                  </div>
+                  <div className="text-center">
+                    <Square className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+                    <div>En nasido</div>
+                  </div>
+                  <div className="text-center">
+                    <Sun className="w-4 h-4 text-gray-400 mx-auto mb-1" />
+                    <div>En resountiar</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* CSAT Card 2 */}
+            <Card className="bg-white">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">CSAT</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center mb-4">
+                  <div className="text-4xl font-bold text-gray-900 mb-1">{stats?.csat.average || 4.2}</div>
+                  <div className="text-sm text-gray-600">{stats?.csat.responses || 385} respuestas</div>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                  <div
+                    className="bg-gradient-to-r from-blue-600 to-yellow-500 h-3 rounded-full"
+                    style={{ width: `${((stats?.csat.average || 4.2) / 5) * 100}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs text-gray-500 mb-2">>> MA</div>
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                  <Pen className="w-3 h-3" />
+                  <Ruler className="w-3 h-3" />
+                  <span>15ed tonmorsera 9138-37 25</span>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
