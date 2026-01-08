@@ -684,7 +684,7 @@ export default function DashboardPage() {
                     style={{ width: `${((stats?.csat.average || 4.2) / 5) * 100}%` }}
                   ></div>
                 </div>
-                <div className="text-xs text-gray-500 mb-2">>> MA</div>
+                <div className="text-xs text-gray-500 mb-2">{'>'}{'>'} MA</div>
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
                   <Pen className="w-3 h-3" />
                   <Ruler className="w-3 h-3" />
