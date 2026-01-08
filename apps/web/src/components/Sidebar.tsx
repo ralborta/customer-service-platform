@@ -19,15 +19,16 @@ import {
 } from 'lucide-react';
 
 const menuItems = [
-  { href: '/inbox', label: 'Inbox', icon: MessageSquare },
-  { href: '/tickets', label: 'Tickets', icon: Ticket },
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/inbox', label: 'WhatsApp', icon: MessageSquare },
+  { href: '/tickets', label: 'Reclamos', icon: Ticket },
   { href: '/knowledge', label: 'Información', icon: BookOpen },
-  { href: '/tracking', label: 'Tracking', icon: Package },
-  { href: '/quotes', label: 'Quotes', icon: FileText },
-  { href: '/surveys', label: 'Surveys', icon: BarChart3 },
-  { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/observability', label: 'Observability', icon: Activity },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/tracking', label: 'Track & Trace', icon: Package },
+  { href: '/quotes', label: 'Facturación', icon: FileText },
+  { href: '/surveys', label: 'Encuestas', icon: BarChart3 },
+  { href: '/notifications', label: 'Notificaciones', icon: Bell },
+  { href: '/observability', label: 'Monitoreo', icon: Activity },
+  { href: '/settings', label: 'Configuración', icon: Settings },
 ];
 
 export function Sidebar() {
@@ -35,19 +36,11 @@ export function Sidebar() {
 
   return (
     <div className="w-64 bg-slate-900 h-screen fixed left-0 top-0 flex flex-col">
-      {/* Header con Inbox y Customer */}
+      {/* Header con logo/brand */}
       <div className="p-4 border-b border-slate-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 text-white">
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-sm font-medium">Inbox</span>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="flex items-center gap-2 text-white">
-            <User className="w-5 h-5" />
-            <span className="text-sm font-medium">Customer</span>
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          </div>
+        <div className="flex items-center gap-2 text-white">
+          <LayoutDashboard className="w-6 h-6" />
+          <span className="text-lg font-semibold">ElectroCentro</span>
         </div>
       </div>
       
