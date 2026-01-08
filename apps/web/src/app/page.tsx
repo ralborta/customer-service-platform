@@ -88,7 +88,7 @@ export default function DashboardPage() {
         .slice(0, 10)
         .map((t, idx) => {
           const customerName = t.customer?.name || `Cliente ${t.customer?.phoneNumber || 'Sin teléfono'}`;
-          const initials = customerName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+          const initials = customerName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
           
           return {
             id: t.id,
