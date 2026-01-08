@@ -104,7 +104,13 @@ export default function DashboardPage() {
             } else if (conv.messages && conv.messages.length > 0) {
               // Intentar obtener tipo del metadata del último mensaje
               try {
-                const fullConv = await apiRequest(`/conversations/${conv.id}`);
+                const fullConv = await apiRequest<{
+                  messages?: Array<{
+                    metadata?: {
+                      intent?: string;
+                    };
+                  }>;
+                }>(`/conversations/${conv.id}`);
                 const lastMessage = fullConv.messages?.[fullConv.messages.length - 1];
                 if (lastMessage?.metadata?.intent) {
                   const intent = lastMessage.metadata.intent.toUpperCase();
