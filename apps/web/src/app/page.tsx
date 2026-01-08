@@ -140,12 +140,13 @@ export default function DashboardPage() {
           })
       );
       
-      // Ordenar por prioridad (URGENT primero, luego por fecha)
+      // Ordenar por prioridad (URGENT primero, luego por fecha de actualización)
       const urgentList = conversationsWithTickets
         .sort((a, b) => {
           if (a.slaStatus === 'risk' && b.slaStatus !== 'risk') return -1;
           if (a.slaStatus !== 'risk' && b.slaStatus === 'risk') return 1;
-          return new Date(b.waiting).getTime() - new Date(a.waiting).getTime();
+          // Ordenar por fecha de actualización (más recientes primero)
+          return 0; // Ya están ordenados por fecha en la query
         })
         .slice(0, 10)
         .map((item, idx) => ({
