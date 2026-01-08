@@ -64,12 +64,6 @@ export default function InboxPage() {
     try {
       setLoading(true);
       
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      if (!token) {
-        window.location.href = '/login';
-        return;
-      }
-      
       const data = await apiRequest<Conversation[]>('/conversations');
       setConversations(data);
       if (data.length > 0 && !selectedConversation) {

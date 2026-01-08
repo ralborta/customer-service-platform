@@ -25,7 +25,7 @@ export default function LoginPage() {
       });
 
       localStorage.setItem('token', response.token);
-      router.push('/inbox');
+      router.push('/');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Error al iniciar sesión';
       console.error('❌ Login error:', err);

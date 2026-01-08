@@ -88,11 +88,10 @@ export default function DashboardPage() {
       const openTickets = ticketsData.filter(t => t.status === 'OPEN' || t.status === 'IN_PROGRESS').length;
       const inRiskTickets = 5;
       
-      // Cargar conversaciones de WhatsApp con sus tickets asociados
+      // Cargar TODAS las conversaciones de WhatsApp (sin filtros)
       const conversationsWithTickets = await Promise.all(
         conversationsData
-          .filter(c => c.primaryChannel === 'WHATSAPP' && (c.status === 'OPEN' || c.status === 'PENDING'))
-          .slice(0, 20)
+          .filter(c => c.primaryChannel === 'WHATSAPP')
           .map(async (conv) => {
             // Obtener ticket asociado si existe
             const ticket = ticketsData.find(t => t.conversationId === conv.id);
@@ -146,18 +145,19 @@ export default function DashboardPage() {
           })
       );
       
-      // Ordenar por prioridad (URGENT primero, luego por fecha de actualización)
+      // Ordenar por fecha de actualización (más recientes primero) y prioridad
       const urgentList = conversationsWithTickets
         .sort((a, b) => {
+          // Primero por prioridad (risk primero)
           if (a.slaStatus === 'risk' && b.slaStatus !== 'risk') return -1;
           if (a.slaStatus !== 'risk' && b.slaStatus === 'risk') return 1;
-          // Ordenar por fecha de actualización (más recientes primero)
-          return 0; // Ya están ordenados por fecha en la query
+          // Luego por fecha de actualización (más recientes primero)
+          // Las conversaciones ya vienen ordenadas del API, pero podemos ordenar por waiting time
+          return 0;
         })
-        .slice(0, 10)
         .map((item, idx) => ({
           ...item,
-          slaBadge: idx === 0 ? '-1' : idx === 1 ? '-15s' : idx === 2 ? '+0s' : 'Ok'
+          slaBadge: idx < 3 ? (idx === 0 ? '-1' : idx === 1 ? '-15s' : '+0s') : 'Ok'
         }));
 
       setStats({
@@ -473,16 +473,16 @@ export default function DashboardPage() {
             <Card className="lg:col-span-2 bg-white">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold">Cola de trabajo</CardTitle>
-                  <Link href="/tickets" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                    Urgentes ahora <ArrowRight className="w-4 h-4" />
+                  <CardTitle className="text-lg font-semibold">Cola de mensajes</CardTitle>
+                  <Link href="/inbox" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    Ver todos <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
               </CardHeader>
               <CardContent>
                 {urgentWork.length === 0 ? (
                   <div className="text-center py-8 text-gray-500 text-sm">
-                    No hay reclamos urgentes
+                    No hay mensajes de WhatsApp
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
