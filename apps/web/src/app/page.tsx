@@ -526,6 +526,12 @@ export default function DashboardPage() {
                             <td className="py-3 px-4 text-sm text-gray-600">{item.channel}</td>
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-2">
+                                <Link
+                                  href={`/inbox?conversation=${item.conversationId}`}
+                                  className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors"
+                                >
+                                  Tomar
+                                </Link>
                                 {idx === 0 && (
                                   <>
                                     <button className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-200 transition-colors">
