@@ -395,7 +395,7 @@ export default function InboxPage() {
 
           {/* Columna Derecha: Detalles del Cliente */}
           {selectedConversation && (
-            <div className="w-80 bg-white border-l flex flex-col overflow-hidden">
+            <div className="w-80 bg-white border-l flex flex-col overflow-hidden relative">
               {/* Header */}
               <div className="p-4 border-b">
                 <div className="flex items-center justify-between">
